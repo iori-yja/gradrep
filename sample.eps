@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>COINS identity provider</title>
+    <link rel="stylesheet" type="text/css" href="/idp/login.css"/>
+  </head>
+
+  <body>
+    <div class="wrapper">
+      <div class="container">
+        <header>
+          <a class="logo" href="../images/coins-idp.png"><img src="/idp/images/coins-idp.png" alt="COINS IdP"/></a>
+        </header>
+    
+        <div class="content">
+          <div class="column one">
+            
+              <form id="login" action="/idp/Authn/UserPassword" method="post">
+            
+
+              
+
+              <legend>
+                Username
+              </legend>
+
+              <section>
+                <label for="username">Username</label>
+                <input class="form-element form-field" name="j_username" type="text" value="">
+              </section>
+
+              <legend>
+                Password 
+              </legend>
+
+              <section>
+                <label for="password">Password</label>
+                <input class="form-element form-field" name="j_password" type="password" value="">
+              </section>
+
+              <section>
+                <button class="form-element form-button" type="submit">Login</button>
+              </section>
+            </form>
+            
+          </div>
+          <div class="column two">
+
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="container container-footer">
+          <p class="footer-text">Copyright&copy; 2014 College of Information Science, University of Tsukuba, All Rights Reserved.</p>
+        </div>
+      </footer>
+    </div>
+    
+  </body>
+</html>
