@@ -1,7 +1,7 @@
 %!PS-Adobe-3.0 EPSF-3.0
 %%BoundingBox: 16 529 397 800
-%%Title: archtech
-%%CreationDate: Tue Jan 26 14:18:12 2016
+%%Title: underlayzerocpy
+%%CreationDate: Tue Jan 26 14:23:26 2016
 %%Creator: Tgif-4.2.5-QPL written by William Chia-Wei Cheng (bill.cheng@acm.org)
 %%ProducedBy: (unknown)
 %%Pages: 1
@@ -9,7 +9,7 @@
 %%EndComments
 %%BeginProlog
 
-/tgifdict 54 dict def
+/tgifdict 87 dict def
 tgifdict begin
 
 /tgifarrowtipdict 8 dict def
@@ -32,6 +32,71 @@ tgifarrowtipdict /mtrx matrix put
       savematrix setmatrix
    end
  } def
+
+/tgifpatdict 12 dict def
+
+/tgifpatbyte
+ { currentdict /retstr get exch
+   bytesperrow mul
+   pat i cellh mod bytesperrow mul bytesperrow getinterval putinterval
+ } def
+
+/tgifpatproc
+ { 0 1 cells_wd 1 sub {tgifpatbyte} for retstr
+   /i i 1 add def
+ } def
+
+/TGPF % tgifpatfill
+ { tgifpatdict begin
+      /h exch def
+      /w exch def
+      /lty exch def
+      /ltx exch def
+      /cellh exch def
+      /cellw exch def
+      /pat exch def
+
+      /cells_wd w cellw div cvi def
+      /bytesperrow cellw 8 div ceiling cvi def
+      /retstr cells_wd bytesperrow mul string def
+      /i 0 def
+
+      tgiforigctm setmatrix
+      ltx lty translate
+      w h true [1 0 0 1 0 0] {tgifpatproc} imagemask
+      ltx neg lty neg translate
+   end
+ } def
+
+/pat3 <8000000008000000> def
+/pat4 <8800000022000000> def
+/pat5 <8800220088002200> def
+/pat6 <8822882288228822> def
+/pat7 <aa55aa55aa55aa55> def
+/pat8 <77dd77dd77dd77dd> def
+/pat9 <77ffddff77ffddff> def
+/pat10 <77ffffffddffffff> def
+/pat11 <7ffffffff7ffffff> def
+/pat12 <8040200002040800> def
+/pat13 <40a00000040a0000> def
+/pat14 <ff888888ff888888> def
+/pat15 <ff808080ff080808> def
+/pat16 <f87422478f172271> def
+/pat17 <038448300c020101> def
+/pat18 <081c22c180010204> def
+/pat19 <8080413e080814e3> def
+/pat20 <8040201008040201> def
+/pat21 <8844221188442211> def
+/pat22 <77bbddee77bbddee> def
+/pat23 <c1e070381c0e0783> def
+/pat24 <7fbfdfeff7fbfdfe> def
+/pat25 <3e1f8fc7e3f1f87c> def
+/pat26 <0102040810204080> def
+/pat27 <1122448811224488> def
+/pat28 <eeddbb77eeddbb77> def
+/pat29 <83070e1c3870e0c1> def
+/pat30 <fefdfbf7efdfbf7f> def
+/pat31 <7cf8f1e3c78f1f3e> def
 
 /TGMAX
  { exch dup 3 1 roll exch dup 3 1 roll gt { pop } { exch pop } ifelse
@@ -134,7 +199,7 @@ GR
 % POLY/OPEN-SPLINE
 0 SG
 GS
-   [4 4] 0 SD
+   [2 2] 0 SD
    NP
       64 288 M
       512 288 L
@@ -417,7 +482,7 @@ NP
 0 SG
    GS
       1 W
-      160 352 M
+      152 352 M
       GS
         GS
         0
@@ -437,7 +502,7 @@ NP
 0 SG
    GS
       1 W
-      288 336 M
+      288 344 M
       GS
         GS
         0
@@ -470,7 +535,7 @@ NP
 0 SG
    GS
       1 W
-      416 352 M
+      424 352 M
       GS
         GS
         0
@@ -560,7 +625,7 @@ NP
 0 SG
    GS
       1 W
-      304 0 M
+      320 0 M
       GS
         GS
         0
@@ -610,19 +675,6 @@ NP
             (interrupt) SH
       GR
    GR
-
-% BOX
-0 SG
-NP 96 64 M 192 64 L 192 288 L 96 288 L CP 1 SG F
-   0 SG
-GS
-   10 SM
-   GS
-      NP 96 64 M 192 64 L 192 288 L 96 288 L CP
-      [2 2] 0 SD
-      S
-   GR
-GR
 
 % POLY/OPEN-SPLINE
 0 SG
@@ -689,49 +741,20 @@ NP 320 83 M tgifstrw 2 DI NE 0 RM tgifstrw 0 RL 0 15 RL tgifstrw neg 0 RL CP 1 S
       GR
    GR
 
-% TEXT
-NP
-0 SG
-NP 105 147 M 183 147 L 183 176 L 105 176 L CP 1 SG F
-0 SG
-   GS
-      1 W
-      144 160 M
-      GS
-        GS
-        0
-            /Courier FF [14 0 0 -14 0 0] MS
-            (virtqueue) TGSW 
-        AD
-        GR
-      2 DI NE 0 RM
-            0 SG
-            /Courier FF [14 0 0 -14 0 0] MS
-            (virtqueue) SH
-      GR
-      0 14 RM
-      GS
-        GS
-        0
-            /Courier FF [14 0 0 -14 0 0] MS
-            (ring buffer) TGSW 
-        AD
-        GR
-      2 DI NE 0 RM
-            0 SG
-            /Courier FF [14 0 0 -14 0 0] MS
-            (ring buffer) SH
-      GR
-   GR
-
 % BOX
 0 SG
 GS
    10 SM
    GS
       NP 32 176 M 704 176 L 704 288 L 32 288 L CP
+      1 SG S 0 SG
+   GR
+   0 SG
+   GS
+      NP 32 176 M 704 176 L 704 288 L 32 288 L CP
       [4 12] 0 SD
-      S
+      FLAT
+      pat30 8 8 24 168 688 128 TGPF
    GR
 GR
 
@@ -812,12 +835,111 @@ NP
       GR
    GR
 
+% POLY/OPEN-SPLINE
+0 SG
+GS
+   NP
+      96 320 M
+      96 64 L
+      192 64 L
+      192 256 L
+      400 256 L
+      400 320 L
+      368 320 L
+      368 288 L
+      256 288 L
+      256 320 L
+      224 320 L
+      224 288 L
+      128 288 L
+      128 320 L
+      96 320 L
+   CP 1 SG EF
+   0 SG
+   NP
+      96 320 M
+      96 64 L
+      192 64 L
+      192 256 L
+      400 256 L
+      400 320 L
+      368 320 L
+      368 288 L
+      256 288 L
+      256 320 L
+      224 320 L
+      224 288 L
+      128 288 L
+      128 320 L
+      96 320 L
+   CP EC NP
+   pat3 8 8 88 56 320 272 TGPF
+GR
+GS
+   [12 4 4 4 4 4] 0 SD
+   NP
+      96 320 M
+      96 64 L
+      192 64 L
+      192 256 L
+      400 256 L
+      400 320 L
+      368 320 L
+      368 288 L
+      256 288 L
+      256 320 L
+      224 320 L
+      224 288 L
+      128 288 L
+      128 320 L
+      96 320 L
+   TGSM
+   1 W
+   S
+   [] 0 SD
+GR
+
+% TEXT
+NP
+0 SG
+NP 105 147 M 183 147 L 183 176 L 105 176 L CP 1 SG F
+0 SG
+   GS
+      1 W
+      144 160 M
+      GS
+        GS
+        0
+            /Courier FF [14 0 0 -14 0 0] MS
+            (virtqueue) TGSW 
+        AD
+        GR
+      2 DI NE 0 RM
+            0 SG
+            /Courier FF [14 0 0 -14 0 0] MS
+            (virtqueue) SH
+      GR
+      0 14 RM
+      GS
+        GS
+        0
+            /Courier FF [14 0 0 -14 0 0] MS
+            (ring buffer) TGSW 
+        AD
+        GR
+      2 DI NE 0 RM
+            0 SG
+            /Courier FF [14 0 0 -14 0 0] MS
+            (ring buffer) SH
+      GR
+   GR
+
 GR
 tgifsavedpage restore
 end
 showpage
 
 %%Trailer
-%MatchingCreationDate: Tue Jan 26 14:18:12 2016
+%MatchingCreationDate: Tue Jan 26 14:23:26 2016
 %%DocumentFonts: Courier
 %%EOF
