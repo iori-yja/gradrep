@@ -7,7 +7,7 @@
 \setcounter{page}{-1}
 \usepackage{fontspec}
 \usepackage{float}
-
+\usepackage{pdflscape}
 
 \usepackage[dvipsnames]{xcolor}
 \usepackage{titlesec}
@@ -780,9 +780,17 @@ virtio-net とは、 virtio の標準規格\cite{virtio_spec}で定められた�
 
 送信キューは、 Function Kernel が外にデータを送りたいときに用いられ、 Function Kernel がそこに書き終わると DeviDevice Masquerading Underlay に通知する。 Device Masquerading Underlay はそこから取り出して実際のデバイスに割り振って送信する。
 
+送信すべき内容は Function Kernel がまず Avail リングバッファに格納し、 avail インデックスを進める。デバイスには notification 構造体へ書き込みのアクセスが行われ、このタイミングでメモリアクセスをフックし Device Masquerading Underlay が avail インデックスと used インデックスを比較、間にあるバッファを送信する。
+
+データを送信し終わると Device Masquerading Underlay は used インデックスを進める。
+
+Used リングバッファに格納された使用済ページは Function Kernel によって破棄される。
+
 \subsection{受信時の動作}
 
 受信キューは、 実デバイスが Function Kernel に割り込みを通達すると、 Function Kernel が Device Masquerading Underlay の割り込み原因レジスタを見にくるので、そのタイミングで実デバイスから Device Masquerading Underlay が情報を取り出し、 Function Kernel に処理を戻す。
+
+あらかじめ Function Kernel は多めに空白ページを確保しておき、 avail リングバッファにつないでおく。 Device Masquerading Underlay が受信処理をし、書き込み終わったものから順番に used リングバッファにつなぎ、 used インデックスを進める。このとき、 Function Kernel は割り込みを受けて原因レジスタを見にきたところなので、ここでパケットの受信による割り込みであると通達することでこの used リングバッファを Function Kernel が消費して受信処理が完了する。消費し終わったページはやはり Function Kernel が破棄する。適宜のタイミングで Function Kernel は avail リングバッファを補充する。この補充が遅れるとネットワーク性能に影響がでてしまう。
 
 %\subsection{制御}
 %\section{Exitless Device Masquerading の仕組み}
@@ -791,13 +799,21 @@ virtio-net とは、 virtio の標準規格\cite{virtio_spec}で定められた�
 
 今回実装した \tikz[baseline=-0.5ex]{\node(v){virtio};\node(r)[right=1cm of v]{実デバイス};\draw[<->] (v) -- (r);} 変換の性能を評価するため、ネットワークの速度評価で知られる netperf と ping で実験を行った。
 
+また、本研究での実装で、性能に影響を与える可能性があるパラメータとしてキューのサイズが挙げられる。キューが小さすぎると性能が悪化することは上記のとおりだ。そこで様々なキューのサイズで試行した。しかし、使用済のキューの廃棄は簡単であり、今回 Function Kernel として用いた Linux 4.4.0 では適切にハンドリングしているので、キューのサイズによる性能の劣化は見られなかった。
+
+また、比較対象として baremetal と KVM に対して同様の実験を行った。
+
+baremetal とは、ここでは仮想マシンをはじめとするインターセプタが存在しない、ハードウェアの上で動く既存のオペレーティングシステムの環境のことを指す。
+
+KVM はよく知られたハイパーバイザの実装で、この実装も virtio を利用しているが、図 \ref{existhyp} のようなアーキテクチャをしているためレイテンシが大きくなってしまう。
+
 \section{Intel 1GbEでのスループット}
 
-この実験は netperf というベンチマークソフトウェアで行った。
+この実験は netperf というベンチマークソフトウェアで行った。ベンチマーク環境については、 Appendix \ref{letsnote}章に記した。
 
 Virtio で用いる リングバッファのキューのサイズを変えて実験を行った。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
 \begin{tikzpicture}
   \begin{axis}[
       ybar,
@@ -834,11 +850,15 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
 \caption{DMU がある場合とない場合、及びある場合のキューサイズごとのスループットの測定}
 \end{figure}
 
-このように、キューのサイズでわずかに性能改善し、最大はキューサイズが 1024 個だった場合だが、するが、いずれの場合にしてもほとんど性能劣化はなく、おそらく偶発的に baremetal の性能を上回った。
+このように、キューのサイズでわずかに性能改善し、最大はキューサイズが 1024 個だった場合だが、いずれの場合にしてもほとんど性能劣化はなく、むしろおそらく偶発的に baremetal の性能を上回った。
 
 これはボトルネックがソフトウェアではなく、ネットワークデバイスそのものにあるということを示している。
 
-\begin{figure}[htbp]
+\section{Intel 1GbEでのレイテンシ}
+
+次はレイテンシについてベンチマークした。このベンチマークは ping コマンドを flood モードで使うことで行った。ベンチマーク環境については、 Appendix \ref{letsnote}章に記した。
+
+\begin{figure}[H]
 \begin{tikzpicture}
   \begin{axis}
     [
@@ -874,6 +894,99 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
 \end{tikzpicture}
 \caption{DMU がある場合とない場合とKVM上のゲストとの通信の場合、及びある場合のキューサイズごとのレイテンシの測定}
 \end{figure}
+
+この図から、やはり KVM の上で動作するオペレーティングシステムとの通信はレイテンシが大きくなってしまうことが分かる。しかし意外なことに、 KVM に対してだけではなく、 baremetal に対しても Device Masquerading Underlay を使った場合の方がより小さなレイテンシで動作することが分かった。
+
+この事象に関する仮説として、おそらく Linux の割り込みハンドリングの仕組みによるものだということが出来る。
+
+Linux では、割り込みがくるとその原因を調べ、原因をクリアしてから適切なハンドラを選択し登録する。その後、そのハンドラを適切なタイミングで実行する(top/bottom half)。そこで考えられる Linux の 1 GbE ドライバの挙動を示す。
+
+\begin{landscape}
+\begin{figure}[htbp]
+  \thispagestyle{plain}
+\begin{minipage}{0.4\hsize}
+  \begin{center}
+\begin{tikzpicture}[->, >=stealth']
+  % Fside
+  \coordinate (epoc) at (-1, 0);
+  \coordinate (inevent2) at (-1, -1.4); \node [align=left, left=1ex of inevent2] {割り込み受理};
+  \coordinate (ineventend) at (-1, -2); \node [align=left, left=1ex of ineventend] {割り込みレジスタをクリア};
+  \coordinate (bottomhalf) at (-1, -7);  \node [align=left, left=1ex of bottomhalf] {Bottom Half を開始};
+  \coordinate (bottomhalf2) at (-1, -7.5);  \node [align=left, left=1ex of bottomhalf2] {Bottom Half処理};
+  \coordinate (bottomhalfend) at (-1, -11.5);  \node [align=left, left=1ex of bottomhalfend] {Bottom Half処理完了};
+
+  % Dside
+  \coordinate (epoc2) at (1, 0);
+  \coordinate (inevent) at  (1, -1);   \node [align=right, right=1ex of inevent] {受信};
+  \coordinate (clearreg) at (1, -2.5); \node [align=right, right=1ex of clearreg] {クリア完了};
+  \coordinate (copy) at (1, -8); \node [align=right, right=1ex of copy] {受信処理開始};
+  \coordinate (copy2) at (1, -11); \node [align=right, right=1ex of copy2] {受信処理完了};
+  \coordinate (end) at (-1, -12);
+  \coordinate (end2) at (1, -12);
+  \draw[->] (epoc) -- (end);
+  \draw[->] (epoc2) -- (end2);
+  \node [above=1ex of epoc] {OS};
+  \node [above=1ex of epoc2] {Device};
+  \draw[->] [draw=blue] (inevent) -- (inevent2);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (inevent2) -- (ineventend);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (bottomhalf) -- (bottomhalf2);
+  \draw[->] [draw=red] (ineventend) -- (clearreg);
+  \draw[->] [draw=red] (bottomhalf2) -- (copy);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (copy) -- (copy2);
+  \draw[->] [draw=red] (copy2) -- (bottomhalfend);
+\end{tikzpicture}
+\caption{PRO/1000に対する Linux の挙動 (baremetal)}
+  \end{center}
+\end{minipage}
+\begin{minipage}{0.4\hsize}
+  \begin{center}
+\begin{tikzpicture}[->, >=stealth']
+  % Fside
+  \coordinate (epoc) at (-2, 0);
+  \coordinate (inevent2) at (-2, -1.4); \node [align=left, left=1ex of inevent2] {割り込み受理};
+  \coordinate (ineventend) at (-2, -2); \node [align=left, left=1ex of ineventend] {割り込みレジスタをクリア};
+  \coordinate (bottomhalf) at (-2, -7);  \node [align=left, left=1ex of bottomhalf] {Bottom Half を開始};
+  \coordinate (bottomhalfend) at (-2, -8);  \node [align=left, left=1ex of bottomhalfend] {Bottom Half処理完了};
+  \coordinate (end) at (-2, -12);
+
+  % Dside
+  \coordinate (epoc2) at (1, 0);
+  \coordinate (clearreg) at (1, -2.5); \node [align=right, right=1ex of clearreg] {クリア完了};
+  \coordinate (clearreg2) at (1, -3); \node [align=left, left=1ex of clearreg2] {受信ハンドラ開始};
+  \coordinate (clearend) at (1, -7);  \node [align=left, left=1ex of clearend]  {受信ハンドラ終了};
+  \coordinate (end2) at (1, -12);
+
+  \coordinate (epoc3) at (4, 0);
+  \coordinate (inevent) at  (4, -1);   \node [align=right, right=1ex of inevent] {受信};
+  \coordinate (copy) at (4, -3.5);  \node [align=right, right=1ex of copy] {受信処理開始};
+  \coordinate (copy2) at (4, -6.5); \node [align=right, right=1ex of copy2] {受信処理完了};
+  \coordinate (end3) at (4, -12);
+
+  \draw[->] (epoc) -- (end);
+  \draw[->] (epoc2) -- (end2);
+  \draw[->] (epoc3) -- (end3);
+  \node [above=1ex of epoc] {FK};
+  \node [above=1ex of epoc2] {DMU};
+  \node [above=1ex of epoc3] {Device};
+  \draw[->] [draw=blue] (inevent) -- (inevent2);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (inevent2) -- (ineventend);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (bottomhalf) -- (bottomhalfend);
+  \draw[->] [draw=red] (ineventend) -- (clearreg);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (clearreg) -- (clearreg2);
+  \draw[->] [draw=red] (clearreg2) -- (copy);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (copy) -- (copy2);
+  \draw[->] [draw=red] (copy2) -- (clearend);
+\end{tikzpicture}
+\caption{PRO/1000に対する Device Masquerading Underlay と Function Kernel の挙動}
+  \end{center}
+\end{minipage}
+\end{figure}
+\newpage
+\end{landscape}
+
+
+また、
+
 %\subsection{UDP}
 %\section{Broadcomm 1GbEでの性能}
 %\subsection{UDP}
@@ -884,7 +997,64 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
 
 \chapter{結論}
 
-\chapter{Appendix}
+\appendix
+\chapter{実験環境について}
+\section{Intel PRO/1000を用いた実験環境について}
+\label{letsnote}
+
+\chapter{ソースコード}
+
+\chapter{PCI configuration 空間の例}
+
+ここで示す出力は\lstinline[language=sh]{sudo lspci -xxxxvvvv} というコマンドで得ることが出来る。
+
+\section{Intel PRO/1000}
+
+\small
+\begin{verbatim}
+00:19.0 Ethernet controller: Intel Corporation Ethernet Connection I218-LM (rev 04)
+        Subsystem: Matsushita Electric Industrial Co., Ltd. Device 8338
+        Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx+
+        Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+        Latency: 0
+        Interrupt: pin A routed to IRQ 45
+        Region 0: Memory at f7f00000 (32-bit, non-prefetchable) [size=128K]
+        Region 1: Memory at f7f44000 (32-bit, non-prefetchable) [size=4K]
+        Region 2: I/O ports at f080 [size=32]
+        Capabilities: [c8] Power Management version 2
+                Flags: PMEClk- DSI+ D1- D2- AuxCurrent=0mA PME(D0+,D1-,D2-,D3hot+,D3cold+)
+                Status: D0 NoSoftRst- PME-Enable- DSel=0 DScale=1 PME-
+        Capabilities: [d0] MSI: Enable+ Count=1/1 Maskable- 64bit+
+                Address: 00000000fee0200c  Data: 4183
+        Capabilities: [e0] PCI Advanced Features
+                AFCap: TP+ FLR+
+                AFCtrl: FLR-
+                AFStatus: TP-
+        Kernel driver in use: e1000e
+00: 86 80 5a 15 07 04 10 00 04 00 00 02 00 00 00 00
+10: 00 00 f0 f7 00 40 f4 f7 81 f0 00 00 00 00 00 00
+20: 00 00 00 00 00 00 00 00 00 00 00 00 f7 10 38 83
+30: 00 00 00 00 c8 00 00 00 00 00 00 00 05 01 00 00
+40: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+70: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+90: 00 00 00 00 00 00 00 00 d8 00 00 00 f8 f0 03 31
+a0: 00 00 00 00 00 00 00 00 03 10 00 00 00 00 00 00
+b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+c0: 00 00 00 00 00 00 00 00 01 d0 22 c8 00 20 00 07
+d0: 05 e0 81 00 0c 20 e0 fe 00 00 00 00 83 41 00 00
+e0: 13 00 06 03 00 00 00 00 00 00 00 00 00 00 00 00
+f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+\end{verbatim}
+
+
+\section{virtio-netデバイス}
+\begin{verbatim}
+\end{verbatim}
+
+
 
 \bibliography{main}
 
