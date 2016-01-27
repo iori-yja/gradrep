@@ -1,0 +1,62 @@
+\begin{tikzpicture}[every node/.append style={draw}]
+  \node (mem)
+        [rectangle split, rectangle split horizontal,
+         rectangle split parts=3, text width=16ex, text height=1ex, centered,
+         rectangle split part align=center
+        ]
+        {\nodepart{one} \raisebox{1pt}{10bit}\strut
+         \nodepart{two} 10bit\strut
+         \nodepart{three} 12bit\strut
+        };
+  \node (table1)
+            [rectangle split, rectangle split parts=10, draw, below right=of mem.one] 
+     {  \nodepart{one} \textbf{Pagetable}
+       \nodepart{six} \footnotesize{該当するエントリ}
+    };
+  \node (table2)
+            [rectangle split, rectangle split parts=10, draw, below right=of mem.two] 
+     {  \nodepart{one} \textbf{Pagetable}
+       \nodepart{two} \footnotesize{該当するエントリ}
+    };
+   \node (CR3) [rectangle, left=8mm of table1] {CR3レジスタ};
+   \node (add) [circle, right=8mm of table2] {+};
+   \coordinate (pm) at (16, -5);
+  \node (pmm)
+        [rectangle split, rectangle split horizontal,
+         rectangle split parts=3, text width=16ex, text height=1ex, centered,
+         rectangle split part align=center, right=3mm of add
+        ]
+        {\nodepart{one} \raisebox{1pt}{10bit}\strut
+         \nodepart{two} 10bit\strut
+         \nodepart{three} 12bit\strut
+        };
+
+  \node (table3)
+            [rectangle split, rectangle split parts=10, draw, below right=of pmm.one] 
+     {  \nodepart{one} \textbf{EPT}
+       \nodepart{four}\footnotesize{該当するエントリ}
+    };
+  \node (table4)
+            [rectangle split, rectangle split parts=10, draw, below right=of pmm.two] 
+     {  \nodepart{one} \textbf{EPT}
+       \nodepart{seven}\footnotesize{該当するエントリ}
+    };
+   \node (EPTP) [rectangle, left=8mm of table3] {EPTP};
+   \node (add2) [circle, right=8mm of table4] {+};
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (mem.one south) -- (table1.one north);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (mem.two south) -- (table2.one north);
+  %\draw[-{Stealth[scale=1.3,angle'=45]}] (mem.three south) -- (table3.one north);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (table1.six east) -- (table2.one west);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (table2.two east) -- (add);
+  %\draw[-{Stealth[scale=1.3,angle'=45]}] (table3.four east) -- (add);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (mem.three south) -- (add);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (add) -- (pmm);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (CR3) -- (table1.one west);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (EPTP) -- (table3.one west);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (pmm.one south) -- (table3.one north);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (pmm.two south) -- (table4.one north);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (table3.four east) -- (table4.one west);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (table4.seven east) -- (add2);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (add2) -- (pm);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (pmm.three south) -- (add2);
+\end{tikzpicture}

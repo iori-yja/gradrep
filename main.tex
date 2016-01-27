@@ -2,7 +2,6 @@
 \usepackage{fancyhdr}
 \usepackage[dvipdfmx]{graphicx} % for \includegraphics[width=3cm]{sample.eps}
 \usepackage{times} % use Times Font instead of Computer Modern
-
 \usepackage{hyperref}
 \setcounter{tocdepth}{3}
 \setcounter{page}{-1}
@@ -16,8 +15,7 @@
 % Don't use \fontspec directly to change the font
 %\newfontfamily\subsubsectionfont[Color=MSLightBlue]{Times New Roman}
 % Set formats for each heading level
-\titleformat{\chapter}[display]
-{\bfseries\HUGE\color{MSBlue}}
+\titleformat{\chapter}[display]{\bfseries\HUGE\color{MSBlue}}
 {\filleft\Huge\colorbox{MSBlue}{\textcolor{white}{\thechapter}}}
 {-0.23em}
 {\titlerule\vspace{1ex}\filright}
@@ -56,6 +54,73 @@
 %\setlength{\topsep}{0em}
 
 %\newcommand{\zu}[1]{{\gt \bf 図\ref{#1}}}
+
+\usepackage{tikz}
+\usepackage{tikzscale}
+\usetikzlibrary{shapes.multipart,positioning}
+\usetikzlibrary{arrows.meta}
+\tikzset{
+    font=\ttfamily,
+    BLOCK/.style={
+        draw,
+        align=center,
+        text height=0.4cm,
+        draw=red!50,
+        fill=red!20,
+        rectangle split, 
+        rectangle split horizontal,
+        rectangle split parts=#1, 
+        
+    }
+}
+
+\usepackage{environ}
+\makeatletter
+
+\newsavebox{\measure@tikzpicture}
+\NewEnviron{scaletikzpicturetowidth}[1]{%
+  \def\tikz@width{#1}%
+  \def\tikzscale{1}\begin{lrbox}{\measure@tikzpicture}%
+  \BODY
+  \end{lrbox}%
+  \pgfmathparse{#1/\wd\measure@tikzpicture}%
+  \edef\tikzscale{\pgfmathresult}%
+  \BODY
+}
+\makeatother
+
+
+\input{jpncolor.tex}
+\usepackage{listings}
+\lstset{
+  backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
+  basicstyle=\ttfamily,
+  %basicstyle=\footnotesize,        % the size of the fonts that are used for the code
+  commentstyle=\textit,
+  %commentstyle=\color{mygreen},    % comment style
+  classoffset=1,
+  keywordstyle=\bfseries,
+  frame=trBL,
+  keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+  showstringspaces=false,
+  numbers=left,
+  numbersep=5pt,                   % how far the line-numbers are from the code
+  stepnumber=1,
+  numberstyle=,
+  keywordstyle=\bfseries\color{shinbashi},
+  commentstyle=\itshape\color{koke},
+  identifierstyle=\color{miru},
+  stringstyle=\color{sakuranezumi},
+  breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=b,                    % sets the caption-position to bottom
+  language=C,                 % the language of the code
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  %showtabs=false,                  % show tabs within strings adding particular underscores
+  %stringstyle=\color{mymauve},     % string literal style
+  tabsize=2,	                   % sets default tabsize to 2 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
 
 \bibliographystyle{acm}
 
@@ -239,7 +304,7 @@ virtio デバイスとして振る舞う部分は共通のコードを使うこ�
   \begin{center}
     \includegraphics[width=.7\textwidth]{./archtech.eps}
     \caption{Device Underlay Architechture}
-    \label{underlayarch}
+    \label{ulayarch}
   \end{center}
 \end{figure}
 
@@ -252,7 +317,7 @@ Device Masquerading Underlay は実際のデバイスを制御しつつ、 virti
 
 そこでメモリコピーを減らし、不可欠なデバイスへのコピーを除いてメモリコピーを最終的にはゼロにしたい。この手法を独自に Zero-copy Device Masquerading と名付け実装する。図で示すと図 \ref{underlayzerocpy}のようになる。
 
-この技法の概要は、主に Function Kernel から与えられたメモリバッファをそのままデバイスへ書くというものだが、そのためには個別のデバイスドライバが virtio 特有の処理を行わなければならず、図 \ref{underlayarch} で表したような分離が難しくなる。そこで個別のデバイスドライバでの virtio 対応を極力減らすために実装上の工夫が必要となった。
+この技法の概要は、主に Function Kernel から与えられたメモリバッファをそのままデバイスへ書くというものだが、そのためには個別のデバイスドライバが virtio 特有の処理を行わなければならず、図 \ref{underlayarch} で表したような分離が難しくなる。そこで個別のデバイスドライバでの virtio 対応の手間を極力減らすために実装上の工夫が必要となった。
 
 \begin{figure}[htbp]
   \begin{center}
@@ -269,7 +334,7 @@ Device Masquerading Underlay は実際のデバイスを制御しつつ、 virti
 
 \section{Device Masquerading Underlay の技術的仕様}
 
-Device Masquerading Underlay の仕様は上記のとおりだが、実装上の制約をいくつか述べる。まず前述のように必須な処理としてOSより先に起動するという点が挙げられる。ここで行う処理は主に、 Device Masquerading Underlay のプログラム領域の保護や、 virtio 化のためのフック関数の登録、virtio 化するためのデバイスの検索と初期化である。
+Device Masquerading Underlay の仕様は上記のとおりだが、実装上の制約をいくつか述べる。まず前述のように必須な処理としてOSより先に起動するという点が挙げられる。ここで行う処理は主に、 Device Masquerading Underlay のプログラム領域の保護や、 virtio デバイスの作成、それから virtio 化するターゲットとなるデバイスの検索と初期化である。
 
 \subsection{Device Masquerading Underlay の隠蔽}
 
@@ -277,13 +342,206 @@ Device Masquerading Underlay の仕様は上記のとおりだが、実装上の
 
 Function Kernel はどの領域に Device Masquerading Underlay があるのか調べる方法がないので、メモリ領域全体に書き込みを行いかねない。また、自らが管理しているはずのメモリ領域に書いた場合、正しく読み出せなければならない。であるから、 Device Masquerading Underlay はそもそも Function Kernel が書き込まず、また万一書いたとしても書いたとおりに正しく読み出せなくてもよい特別な領域を作って「潜む」必要がある。そのような領域として ACPI テーブルの末尾が挙げられる。
 
-ACPI テーブルとは、電源管理やデバイスツリーの管理のために用意されたメモリ領域で、プラットフォームに非依存の標準規格で定められたものである。 ACPI テーブルはファームウェアによって提供されるが、この領域も Device Masquerading Underlay と同じく上書きされてはならないメモリ領域で、だが Device Masquerading Underlay とは異なり、自らの領域を OS に通達することができる。そこで BitVisor では ACPI テーブルの領域を取得後、その領域に続く場所に自らのプログラムをコピーしなおす。このように起動中の処理として自らのプログラムを再配置する処理は既存のオペレーティングシステムでも一般的な技法である。しかし BitVisor がこれらとは異なるのは ACPI テーブルの直後の箇所に再配置するという場所の差異の他に、ACPI 領域を取得するオペレーティングシステムの操作をインターセプトして、自らの領域を含めた「より大きい」領域がまるで ACPI テーブル領域として予約されているかのように振る舞うという点となる。このように確保したメモリ領域にオペレーティングシステムが読み書きしようとした場合は無効になり、常に 0 が読み出されるようになっている。このことを可能にするのは SPT または EPT という技術である。この技術については後述する。
+ACPI テーブルとは、電源管理やデバイスツリーの管理のために用意されたメモリ領域で、プラットフォームに非依存の標準規格で定められたものである。 ACPI テーブルはファームウェアによって提供されるが、この領域も Device Masquerading Underlay と同じく上書きされてはならないメモリ領域で、だが Device Masquerading Underlay とは異なり、自らの領域を OS に通達することができる。そこで BitVisor では ACPI テーブルの領域を取得後、その領域に続く場所に自らのプログラムをコピーしなおす。このように起動中の処理として自らのプログラムを再配置する処理は既存のオペレーティングシステムでも一般的な技法である。しかし BitVisor がこれらとは異なるのは ACPI テーブルの直後の箇所に再配置するという場所の差異の他に、ACPI 領域を取得するオペレーティングシステムの操作をインターセプトして、自らの領域を含めた「より大きい」領域がまるで ACPI テーブル領域として予約されているかのように振る舞うという点となる。このように確保したメモリ領域にオペレーティングシステムが読み書きしようとした場合は無効になり、常に 0 が読み出されるようになっている。このことを可能にするのは SPT または EPT という技術である。この技術については\ref{aboutEPT}章で解説する。
+
+
+\begin{figure}[htbp]
+\begin{center}
+\begin{scaletikzpicturetowidth}{.55\textwidth}
+\begin{tikzpicture}[scale=\tikzscale]
+\filldraw[fill=green!10!white, draw=green!40!black] (0,0) rectangle (3,10) node[label=above left:640KB]{};
+\coordinate (Z) at (3,0);
+\draw (0,0) node[label=left:Usable] at (0,3) {} rectangle (3,6) node[label=above right:0x8700]{};
+\coordinate (S) at (3,6);
+\coordinate (S2) at (13,6);
+\draw (0,6) node[label=left:Base Memory Trampoline] at (0,7) {} rectangle (3,8)node[label=above right:0x9700]{};
+\coordinate (U) at (3,8);
+\coordinate (U2) at (13,8);
+\draw (0,8) node[label=left:Device Masquerading Underlay] at (0,9){} rectangle (3,10)node[label=above right:0xffff]{};
+\coordinate (H) at (3,10);
+\coordinate (H2) at (13,10);
+\node at (0.5, -5) {リアルモードでのマッピング};
+
+\filldraw[fill=green!10!white, draw=green!40!black] (20,0) rectangle (23,30) node[label=above left:4GB]{};
+\coordinate (B) at (20,0);
+\draw (20,27) rectangle (23,28.5);
+\coordinate (K) at (20,28.5);
+\filldraw[fill=red!20!white, draw=black] (20,8) rectangle (23,10);
+\draw (20,4) rectangle (23,10) node[label=right:ACPI テーブル]{};
+\coordinate (U3) at (20,10);
+\coordinate (S3) at (20,9);
+\draw (20,0) rectangle (23,4) node[label=right:DOS互換領域]{};
+\draw (20,0) rectangle (23,2.5) node[label=right:レガシー領域]{};
+\coordinate (T) at (20,2.5);
+\draw [->] (Z)--(B);
+\draw [->] (H)--(H2)--(T);
+\draw [->] (H)--(H2)--(U3);
+\draw [->] (U)--(U2)--(S3);
+\draw [->] (U)--(U2)--(K);
+\draw [->] (S)--(S2)--(K);
+\node at (25, -5) {プロテクトモードでのマッピング};
+
+\end{tikzpicture}
+\end{scaletikzpicturetowidth}
+\end{center}
+\end{figure}
+
+%\begin{tikzpicture}
+%\foreach \align [count=\y] in {top, center, base, bottom}{
+%    \node at (0,-\y*2) (h1) {host\_entry};
+%    \node[BLOCK=4, below=0 of h1,
+%    label=left:\align,
+%    rectangle split part align=\align]{
+%        \nodepart{one}dpid \nodepart{two}port
+%        \nodepart{three}IP\nodepart{four}MAC};
+%}
+%\end{tikzpicture}
 
 Device Masquerading Underlay も BitVisor の技法を踏襲し、 EPT およびメモリマップの構造を取得する命令のインターセプトを用いて Function Kernel からの破壊を防ぎ、セキュリティを担保している。
 
+\subsection{virtio デバイスの実装上の技法}
+
+一般のハイパーバイザは virtio デバイスをゲストに提供するに当たって新しく作り、 virtio デバイスとして振る舞うエミュレータがアプリケーションとして動作するため、それぞれのハイパーバイザが動作するオペレーティングシステムでのネットワーク通信用のブリッジなどと通信すればよい。しかし本論文での実装では、一つの実在するハードウェアに相当する virtio デバイスを作成し関連付けるので、より効率的な作成方法が考えられる。
+
+この方法を順を追って説明する。
+
+\begin{enumerate}
+\item 後述のように Masquerading の対象となるデバイスを発見する
+\item その PCI configuration 空間に virtio の PCI configuration 空間として有効なものとなるようフック関数を用意する (PCI configuration 空間については後述する)
+\item Function Kernel は BAR と呼ばれる領域のビットマスクを最初に読み出すので適切な値をフック関数で返す
+\item のちにそれぞれのデバイスに相当するデバイスドライバを割り振るために Vendor ID と Device ID を読み出す必要があるので、これを virtio のものにする
+\item Function Kernel はそれぞれのデバイスに相当するドライバが確定すると、その固有のドライバをアサインするので virtio の規格に則り各フィールドを適切な値として返す
+\end{enumerate}
+
+これによって、新たにデバイスの領域を作りだすかわりに、デバイスの種類をすり替えることが出来るようになる。このことで、実際のデバイスが存在するバスの位置に virtio デバイスが存在するように見せかけられるので、抽象化の行き過ぎによる混乱をさけることが出来る。また、新たにデバイスを作成するには PCI configuration 空間を発見するための ACPI テーブルごと変える必要があるが、これは専用の中間言語で操作される高度に複雑なもので、このことでコードサイズが無用に大きくなってしまい attack surface が拡大するが、このすげ替えによる virtio デバイスの作成によって簡単に実際のデバイスの隠蔽も出来、コードサイズ小さくなって処理が簡単になるため、よりよい。
+
 \subsection{適切なデバイスドライバの検索とハンドリング関数への関連付け}
 
+デバイスの探索には ACPI テーブルを読み出して PCI configuration 空間を発見し、ターゲットとなるデバイスを示す ID を持っているものを見つけなければならない。適切な ID とそれに合った初期化ルーチンの関連付けは \lstinline!struct pci_driver! と呼ばれる構造体として記述し、この構造体をリストに登録する上位の初期化ルーチン\lstinline!void pci_register_driver(struct pci_register)!を用いて登録する。この上位の初期化ルーチンは、前述したデバイス固有の初期化ルーチンとは異なって、実在するデバイスの数のみならず対応しているデバイスのドライバの数だけ呼び出される必要があるが、小さな linked list への登録をそれぞれ一度だけ行うものなのでこの実行のコストは無視できる。
+
+\lstinline!void pci_register_driver(struct pci_driver *)!を実行する関数は \lstinline!PCI_DRIVER_INIT(X)!と呼ばれるマクロを通して登録される。 BitVisor ではいくつかの\lstinline!_INIT!で終わる名前のマクロが存在し、ここで与えられた関数は、このマクロの優先度の順に実行される。\lstinline!PCI_DRIVER_INIT!マクロは PCI デバイスの初期化よりも前に実行され、ここで呼ばれた\lstinline!void pci_register_driver(struct pci_driver *)!によって登録された\lstinline!struct pci_driver!型のグローバル変数は ACPI テーブルを BitVisor が解釈した際に探索され、この構造体のメンバ関数である\lstinline!.new!が呼ばれるためにある。このメンバ関数として与えられた初期化ルーチンには、引数としてデバイスオプションが与えられ、このオプションはデバイスの種別やバスの位置などに基づいてユーザがオプションとして与えるものである。
+
+ここでマッチした構造体のメンバ関数は、与えられたオプションや PCI デバイスの固有の情報を与える\lstinline!struct pci_device!という構造体を用いて初期化を行い、上述のような処理を行うフック関数などを登録して終了する。
+
+理解のためにソースコードの一部分を示す。
+
+\begin{lstlisting}
+static void
+bnx_new (struct pci_device *pci_device)
+{
+  :
+  :
+  :
+}
+
+static struct pci_driver bnx_driver = {
+	.name		= driver_name,
+	.longname	= driver_longname,
+	.driver_options	= "tty,net,virtio",
+	.device		= "class_code=020000,id="
+			  "14e4:165f|" /* BCM5720 */
+			  "14e4:165a|" /* BCM5722 */
+			  "14e4:1682|" /* Thunderbolt - BCM57762 */
+			  "14e4:1684|" /* BCM5764M */
+			  "14e4:1686|" /* BCM57766 */
+			  "14e4:1691|" /* BCM57788 */
+			  "14e4:16b4", /* BCM57765 */
+	.new		= bnx_new,
+	.config_read	= bnx_config_read,
+	.config_write	= bnx_config_write,
+};
+
+static void
+bnx_init (void)
+{
+	pci_register_driver (&bnx_driver);
+}
+
+PCI_DRIVER_INIT (bnx_init);
+\end{lstlisting}
+
+ここで、\lstinline!PCI_DRIVER_INIT!マクロによって\lstinline!void bnx_init(void)!が呼ばれることが約束される。これが呼ばれると \lstinline{struct pci_driver bnx_driver} が登録される。もし BitVisor が起動時にこの構造体の \lstinline{.device} で示される文字列に相当する Vendor ID 及びデバイス ID のいずれかを持っている PCI デバイスを発見した場合は、その場で \lstinline{.new} で示された \lstinline{void bnx_new (struct pci_device *pci_device)} を呼ぶ。この中でデバイスを初期化したり、前述のフック関数を登録したりするということになる。
+
+
 \section{EPTによるフックの動作}
+\label{aboutEPT}
+EPT とは、 Extended Page Table の略称で、 Second Level Address Translation という技術の Intel 製品での実装である。まず読者のために、ページテーブルについて軽く説明する。
+
+近代的なアプリケーションは実際のメモリの上で直接動作する代わりに、固有のメモリアドレス空間の上で動作している。しかし固有のメモリ空間を作り出しつつ実際に動作するためには、そのアドレス空間と実際のメモリ空間との間を関連付ける方法が必要になる。その一つとしてセグメント方式が挙げられる。しかし、より高度な分離を行う必要が出てきたのでその後実装された変換方式がページテーブルである。
+
+ページテーブルは 32bit あるいは 64bit のアドレスを、下位の 12bit と残りの 10bit ずつのキーに分割する。それぞれのキーのうちもっとも上位のものをインデックスとしてアドレス変換テーブルを引き、それで得たテーブルに対し残りの最も上位のキーをインデックスとして用いてさらに引き、引き終わったものに先ほどの 12bit を append してアドレスを得る。
+
+この場合最初に引くテーブルをプロセスごとにあてがえば、プロセスごとに独立した空間を作ることができるため良いアドレス変換が出来る。この最初に引くテーブルを指定するものがCR3レジスタと言われる特殊なレジスタである。
+
+現在使われているオペレーティングシステムのほぼすべてはこの仕組みを利用してアドレス変換を行ってプロセスを独立させている。
+
+\begin{figure}[htbp]
+  \begin{center}
+\begin{scaletikzpicturetowidth}{.9\textwidth}
+\begin{tikzpicture}[scale=\tikzscale, every node/.append style={draw}]
+  \node (mem)
+        [rectangle split, rectangle split horizontal,
+         rectangle split parts=3, text width=16ex, text height=2ex, centered,
+         rectangle split part align=center
+        ]
+        {\nodepart{one} \raisebox{1pt}{10bit}\strut
+         \nodepart{two} 10bit\strut
+         \nodepart{three} 12bit\strut
+        };
+
+  \node (table1)
+            [rectangle split, rectangle split parts=10, draw, below right=of mem.one] 
+     {  \nodepart{one} \textbf{Pagetable}
+       \nodepart{six} \footnotesize{該当するエントリ}
+    };
+  \node (table2)
+            [rectangle split, rectangle split parts=10, draw, below right=of mem.two] 
+     {  \nodepart{one} \textbf{Pagetable}
+       \nodepart{two} \footnotesize{該当するエントリ}
+    };
+  %\node (table3)
+  %          [rectangle split, rectangle split parts=10, draw, below=of mem.three] 
+  %   {  \nodepart{one} \textbf{Pagetable}
+  %     \nodepart{four}
+  %  };
+   \node (CR3) at (-30, -10) [rectangle] {CR3レジスタ};
+   \node (add) at (20, -10) [circle] {+};
+   \coordinate (pm) at (35, -10);
+
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (mem.one south) -- (table1.one north);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (mem.two south) -- (table2.one north);
+  %\draw[-{Stealth[scale=1.3,angle'=45]}] (mem.three south) -- (table3.one north);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (table1.six east) -- (table2.one west);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (table2.two east) -- (add);
+  %\draw[-{Stealth[scale=1.3,angle'=45]}] (table3.four east) -- (add);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (mem.three south) -- (add);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (add) -- (pm);
+  \draw[-{Stealth[scale=1.3,angle'=45]}] (CR3) -- (table1.one west);
+\end{tikzpicture}
+\end{scaletikzpicturetowidth}
+  \end{center}
+\end{figure}
+
+このようなアドレス変換のおもな目的として、プロセス空間の分離やセキュリティが挙げられる。プロセスのアドレス空間と物理的なメモリ空間を別のものとして扱うことで、プラットフォーム全体へのアクセスを限定することができる。例えば、リングプロテクションと併用することで、プロセスは CR3 を書き換えられず、プロセス同士の侵入やプラットフォームへの直接のアクセスを防ぐことが出来る。
+
+同様の仕組みを仮想化支援機構として導入したのが、 Second Level Address Translation である。この仕組みは、上に挙げたようなアドレス変換を一段目とし、そこで得たアドレスをさらに変換するというものだ。
+
+
+\begin{figure}[htbp]
+  \begin{center}
+		%\includegraphics[width=0.8\textwidth]{ept.tikz}
+		\resizebox{\textwidth}{!}{
+		\input{ept.tikz}
+	}
+  \end{center}
+\end{figure}
+
+これを行うことで、仮想化ゲストのオペレーティングシステムはハイパーバイザを配慮してメモリを配置したり、あるいはハイパーバイザがゲストのオペレーティングシステムの CR3 を監視して、プロセスが代わるたびに CR3 をセットしたりする必要がなくなった。
+
+ゲストは一般のハードウェアの上で動作しているという前提でアドレス空間を利用してよいし、またそのアドレス空間が物理的にどこにマップされるかはハイパーバイザが決定することが出来るようになった。
+
+Intel の仮想化支援機構では、 VMCS と呼ばれる仮想化ゲストが発行出来る命令やその他の様々な制御用構造体が用意されていて、これをセットアップすることで仮想マシンを作ることが出来るが、 EPT によるアドレス変換の際のエラーハンドリングや、 IO 命令発行時のハンドリングなどをする際には、それらが終了理由になるようにし、 \texttt{vmlaunch} 及び \texttt{vmresume} 命令により、セットアップした VMCS を実際にゲストとして実行してからそのコンテキストが終了するまで待つと、こうしたイベントをフック出来るようになる。
+
 \section{virtio の仕様について}
 \section{PCI device discoveryについて}
 \section{virtqueue の仕様について}
