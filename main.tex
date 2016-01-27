@@ -6,6 +6,8 @@
 \setcounter{tocdepth}{3}
 \setcounter{page}{-1}
 \usepackage{fontspec}
+\usepackage{float}
+
 
 \usepackage[dvipsnames]{xcolor}
 \usepackage{titlesec}
@@ -61,6 +63,9 @@
 \usetikzlibrary{arrows}
 \usetikzlibrary{arrows.meta}
 \usetikzlibrary{positioning}
+\usetikzlibrary[graphs]
+
+\usepackage{ifthen}
 
 \tikzset{
     font=\ttfamily,
@@ -98,11 +103,7 @@
 \lstset{
   backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
   basicstyle=\ttfamily,
-  %basicstyle=\footnotesize,        % the size of the fonts that are used for the code
   commentstyle=\textit,
-  %commentstyle=\color{mygreen},    % comment style
-  classoffset=1,
-  keywordstyle=\bfseries,
   frame=trBL,
   keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
   showstringspaces=false,
@@ -111,7 +112,7 @@
   stepnumber=1,
   numberstyle=,
   keywordstyle=\bfseries\color{shinbashi},
-  commentstyle=\itshape\color{koke},
+ commentstyle=\itshape\color{koke},
   identifierstyle=\color{miru},
   stringstyle=\color{sakuranezumi},
   breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
@@ -119,8 +120,6 @@
   captionpos=b,                    % sets the caption-position to bottom
   language=C,                 % the language of the code
   rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
-  %showtabs=false,                  % show tabs within strings adding particular underscores
-  %stringstyle=\color{mymauve},     % string literal style
   tabsize=2,	                   % sets default tabsize to 2 spaces
   title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
 }
@@ -136,7 +135,7 @@
 
 \usepackage{ulem}
 
-\title{\uline{Offloading device drivers into a hypervisor for separation of concearns}}
+\title{\uline{Offloading device drivers into a hypervisor for separation of concerns}}
 %% 著者
 \author{米司 伊織}
 %% 指導教員
@@ -551,7 +550,7 @@ EPT やページテーブルのエントリには、次のテーブル(ディレ
 
 \section{virtio の仕様について}
 
-virtio は準仮想化デバイスのデファクトスタンダードとして広く用いられており、ライブラリ OS のライブラリでもサポートされる数少ないデバイスである。
+virtio は準仮想化デバイスのデファクトスタンダードとして広く用いられており、ライブラリ OS のライブラリでもサポートされる数少ないデバイスである。この仕様は一度大きく変わっている。今回は既に普及している古い規格ではなく、性能改善のため新しい virtio 1.0 と呼ばれる規格に準拠する。以降の説明は virtio 1.0\cite{virtio_spec} での定義にしたがう。
 
 この規格では、デバイスをその動作の種別によっていくつかのデバイスクラスに分けている。最もよく知られたものに virtio-net と呼ばれるネットワーククラスがある。今回はこれを proof-of-concept の実装として対象にした。このクラスは最もよく知られ、広く利用されているだけでなく、パフォーマンスの測定に便利だという特徴がある。この他のデバイスクラスとして、コンソールやブロックデバイス、ビデオカードなどが挙げられる。
 
@@ -625,13 +624,15 @@ BAR はドライバとデバイス双方が読み書きする32bitの領域だ�
        \nodepart{six} \footnotesize{Capability ptr}
     };
   \node (cap1) 
-            [rectangle split, rectangle split parts=6, draw, right=2 of cfg]
+            [rectangle split, rectangle split parts=8, draw, right=2 of cfg]
             {\nodepart{one} \hypertarget{cap1}{\textbf{Capability エレメント}}
        \nodepart{two} \footnotesize{ID}
        \nodepart{three} \footnotesize{次のエレメントへのポインタ}
        \nodepart{four} \footnotesize{長さ}
        \nodepart{five} \footnotesize{種別}
        \nodepart{six} \footnotesize{BAR 番号}
+       \nodepart{seven} \footnotesize{オフセット}
+       \nodepart{eight} \footnotesize{構造体の長さ}
     };
   \node (cap2)
             [rectangle split, rectangle split parts=6, draw, below=3 of cap1] 
@@ -660,20 +661,134 @@ BAR はドライバとデバイス双方が読み書きする32bitの領域だ�
   \end{center}
 \end{figure}
 
-ここで、\hyperlink{cap1}{最初の capability エレメント}は、 virtio の capability list の形をしている。
+ここで、\hyperlink{cap1}{最初の capability エレメント}は、 virtio の capability list の形をしている。長さはこのエレメントの長さ、種別は構造体の種別を表している。
+
+実際にこのような capability list を作るのは簡単で、このリストも PCI configuration 空間内のものだから、 PCI configuration 空間と同様に改変すれば良い。
+
+ただし、このエレメントはどの内容だろうと自在に配置されてしまうので、 MSI 割り込みを有効にする場合には困難が伴う。というのは、 MSI 割り込みの capability list は MSI 割り込みを利用する場合には必須だが、このフィールドの内容はデバイスの実際の内容を反映しなければならないし、ドライバが提供するアドレス情報やデータ情報をデバイスに書き戻さなければならない。こうした情報を BitVisor で予め読み書きし、ドライバから書き込まれた場合にはその内容を書き戻す必要がある。これは、デバイスに提供した MSI 割り込みの capability list の位置とは異なる可能性があるうえ、このエレメントに示される``次のエレメントへのポインタ''は無効な値であるから適宜読み替えなければならない。さらにその上、こうした capability list の要素が多いデバイスは、 PCI configuration 空間とはアクセスの方法が全く異なる Extended PCI configuration 空間にも情報が書いてある可能性があるので、 MSI 割り込みを必ず有効にするということは大変だ。
+
+\subsection{PCI configuration 空間の改変}
+
+PCI configuration 空間の改変には、Function Kernel からの PCI configuration 空間の読み書きをインターセプトして改変すれば良い。 PCI configuration 空間への読み書きは \texttt{in/out} 命令で行うので、上記の方法でフックすれば良いことになる。起動時に読み書きするだけで、その後頻繁に読み書きするものではないから、多少のオーバヘッドは性能に一切影響を与えない。このことはのちのベンチマークで明らかになる。
+
+PCI configuration 空間への読み書きのインターセプトは既に先行の実装\cite{bitvisor}で提供される仕組みを用いると簡単に実装できる。しかし、 BitVisor の多くの実装では、今回のようにたくさんのフィールドを改変するわけではないため、そのままこの仕組みを利用すると煩雑になってしまう。そこである程度宣言的に書けるよう工夫をした。
 
 \section{virtqueue の仕様について}
 
-virtqueue とは、
+virtqueue とは、 virtio の仕様の根幹をなす機能である。これはメモリのリングバッファになっていて、 virtio を用いた Function Kernel と Device Masquerading Underlay の通信の多くはこのリングバッファを経由して行う。 virtqueue のメモリはドライバの責任で用意する。デバイスはゲストが用意したメモリを読み書きし、使い終わったら返却する。この仕組みを利用して\tikz[baseline=-0.5ex]{\node(v){デバイス};\node(r)[right=1cm of v]{ドライバ};\draw[<->] (v) -- (r);}間の読み書きを行う。
+
+virtqueue のリングバッファのエレメントは任意の大きさのバッファである。このバッファのライフサイクルを示す。
+
+\begin{figure}[H]
+  \begin{center}
+\begin{scaletikzpicturetowidth}{.9\textwidth}
+\begin{tikzpicture}[scale=\tikzscale, ->, >=stealth']
+  \node (u) [circle, fill=koke, draw]{Uninitialized};
+  \node (i) [circle, fill=usugaki, draw, right=7 of u] {initialized};
+  \node (k) [circle, fill=seji, draw, below=of i] {Available};
+  \node (t) [circle, fill=kincha, draw, left=7 of k]  {Used};
+  \draw[->] (u) edge node[auto]{\small{Function Kernel がこのバッファの情報を登録する}} (i)
+            (i) edge node[left]{\small{Function Kernel がバッファを Available にする}}(k)
+            (k) edge node[auto]{\small{Device Masquerading Underlay がバッファを使う}}(t)
+            (t) edge node[auto]{\small{Function Kernel が取り出す}}(u);
+\end{tikzpicture}
+\end{scaletikzpicturetowidth}
+  \caption{virtqueue の 1 バッファのライフサイクル}
+  \end{center}
+\end{figure}
+
+また、これらのバッファを複数管理するためにリングバッファになっているので、そのリングバッファの構造を示す。
+リングバッファは、\texttt{used}と\texttt{avail}と呼ばれるカウンタによってその一部を指されている。\texttt{avail}が\texttt{used}に追い抜かれないという制約を付けると、必ずデバイスにとって available なバッファは $ used \leq x < avail $ の間にあるということが分かる。さらに、リングバッファに直接データを書くのではなく、リングバッファがデータをやり取りする場所を指し示すようにすることで、リングバッファ全体の大きさを一定に保つほうが良い。
+
+\begin{figure}[H]
+  \begin{center}
+\begin{scaletikzpicturetowidth}{.9\textwidth}
+\begin{tikzpicture}[scale=\tikzscale, ->, >=stealth']
+  \node (avail) [rectangle, draw] {avail};
+  \node (used) [rectangle, draw, right of=avail] {used};
+  \foreach \x in {0,...,9} {
+    \ifthenelse{\x=4 \OR \x=5}{\def\mycolor{red!15}}{\def\mycolor{blue!14}}
+    \node (b\x) at (-\x*360/10+90:3) [fill=\mycolor,draw, circle]{buffer\x};
+    \coordinate (p\x) at (-\x*360/10+90:5);
+    \draw[->] (b\x) -- (p\x);
+    }
+  \foreach \x/\y in {0/1, 1/2, 2/3, 3/4, 4/5, 5/6, 6/7, 7/8, 8/9, 9/0} {
+    \draw[->] (b\x) to [bend left] (b\y);
+  }
+  \draw[->] (avail) -- (b6);
+  \draw[->] (used) -- (b4);
+  \node (page) at (p4) [draw, fill=yamabuki!50, rectangle, minimum width=5ex, minimum height=10ex] {page};
+  \node (page2) at (p5) [draw,fill=yamabuki!50, rectangle, minimum width=5ex, minimum height=13ex] {page};
+  \node (page3) [draw, fill=gray!50, rectangle, minimum width=5ex, minimum height=13ex, below left=0.4 of page2] {page};
+  \node (page4) [draw,fill=gray!50, rectangle, minimum width=5ex, minimum height=13ex,  left=0.4 of page3] {page};
+  \node (page5) [draw,fill=gray!50, rectangle, minimum width=5ex, minimum height=13ex,  left=0.4 of page4] {page};
+  \node (page6) [draw,fill=gray!50, rectangle, minimum width=5ex, minimum height=13ex,  left=0.4 of page5] {page};
+  \draw[->] (b5) -- (page2);
+  \draw[->] (b4) -- (page);
+\end{tikzpicture}
+\end{scaletikzpicturetowidth}
+  \caption{リングバッファの構造}
+  \end{center}
+\end{figure}
+
+このリングバッファを作るために必要なデータについて考えると、\texttt{avail} と \texttt{used} のポインタだけでなく、データをやり取りする \texttt{page} の状態や隣のリングバッファの番号などを保持する各リングバッファの要素のディスクリプタを作った方が良い。実際 virtqueue はこの通りに作られている。
+
+virtqueue を構成する具体的な要素について列挙する。
+
+\begin{itemize}
+  \item ディスクリプタ
+  \item Available Ring
+  \item Used Ring
+\end{itemize}
+
+以上のエントリが連続しているメモリ領域を Function Kernel が作成し、 PCI 経由で通達した構造体を通して Device Masquerading Underlay に通達する。このメモリ領域の定義の抜粋を示す。
+
+\begin{lstlisting}[language=C]
+struct virtq_desc {
+/* Address (guest-physical). */
+le64 addr;
+/* Length. */
+le32 len;j
+/* This marks a buffer as continuing via the next field. */
+#define VIRTQ_DESC_F_NEXT 1
+/* This marks a buffer as device write-only (otherwise device read-only). */
+#define VIRTQ_DESC_F_WRITE 2
+/* This means the buffer contains a list of buffer descriptors. */
+#define VIRTQ_DESC_F_INDIRECT 4
+/* The flags as indicated above. */
+le16 flags;
+/* Next field if flags & NEXT */
+le16 next;
+};
+\end{lstlisting}
+
+\texttt{virtq\_desc} は、個々のバッファで、図のように linked list になっている。それぞれ Function Kernel から見たバッファのアドレスが書いてあり、また有効な長さが書いてある構造体だ。\texttt{virtq\_avail} は、 \texttt{avail}状態のバッファの先端の次を指しているほか、いくつかの情報を持っている。 \texttt{virtq\_used} は \texttt{used} 状態のバッファの次を指している。
+
+なぜそれぞれ次のバッファを指しているかというと、もし使用済のデータを指すようであれば、初期化時の値が不明になってしまうからだ。次くる場所を指すようにすれば、当然 0 番目からスタートするので間違いがなくてすむ。
 
 \section{virtio-net の仕様について}
 
+virtio-net とは、 virtio の標準規格\cite{virtio_spec}で定められたデバイスクラスのひとつで、ネットワーク機能を提供する。virtio-net のデバイスは 3 つのキューを持つ。それぞれ、送信キュー、受信キュー、コントロールキューだ。
+
+ここでやり取りされるデータには 12 バイトのヘッダがついていて、その後にはネットワークのイーサネットフレームが続く。
+
+\subsection{送信時の動作}
+送信キューは、 Function Kernel が外にデータを送りたいときに用いられ、 Function Kernel がそこに書き終わると DeviDevice Masquerading Underlay に通知する。 Device Masquerading Underlay はそこから取り出して実際のデバイスに割り振って送信する。
+\subsection{受信時の動作}
+受信キューは、 実デバイスが Function Kernel に割り込みを通達すると、 Function Kernel が Device Masquerading Underlay の割り込み原因レジスタを見にくるので、そのタイミングで実デバイスから Device Masquerading Underlay が情報を取り出し、 Function Kernel に処理を戻す。
+\subsection{制御}
 %\section{Exitless Device Masquerading の仕組み}
-\section{送信時の動作}
-\section{受信時の動作}
-\section{制御}
 
 \chapter{評価}
+\section{Intel 1GbEでの性能}
+\subsection{UDP}
+\subsection{TCP}
+\section{Broadcomm 1GbEでの性能}
+\subsection{UDP}
+\subsection{TCP}
+\section{Intel 10GbEでの性能}
+\subsection{UDP}
+\subsection{TCP}
 
 \chapter{結論}
 
