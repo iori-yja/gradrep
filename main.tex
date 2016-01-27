@@ -768,14 +768,18 @@ le16 next;
 
 \section{virtio-net の仕様について}
 
-virtio-net とは、 virtio の標準規格\cite{virtio_spec}で定められたデバイスクラスのひとつで、ネットワーク機能を提供する。virtio-net のデバイスは 3 つのキューを持つ。それぞれ、送信キュー、受信キュー、コントロールキューだ。
+virtio-net とは、 virtio の標準規格\cite{virtio_spec}で定められたデバイスクラスのひとつで、ネットワーク機能を提供する。virtio-net のデバイスは 3 つのキューを持つ。それぞれ、送信キュー、受信キュー、コントロールキューである。
 
-ここでやり取りされるデータには 12 バイトのヘッダがついていて、その後にはネットワークのイーサネットフレームが続く。
+ここでやり取りされるデータには 12 バイトのヘッダがついていて、その後にはネットワークのイーサネットフレームが続く。また、フレームが一つのバッファに入りきらないことがありえる。そのような場合は後続のデータに続いている。後続のデータは、リングバッファで示された次の要素が指し示している。 Linux のドライバはヘッダとフレームを別々に送ることが多いが、特に仕様で決まっているわけではない。
 
 \subsection{送信時の動作}
+
 送信キューは、 Function Kernel が外にデータを送りたいときに用いられ、 Function Kernel がそこに書き終わると DeviDevice Masquerading Underlay に通知する。 Device Masquerading Underlay はそこから取り出して実際のデバイスに割り振って送信する。
+
 \subsection{受信時の動作}
+
 受信キューは、 実デバイスが Function Kernel に割り込みを通達すると、 Function Kernel が Device Masquerading Underlay の割り込み原因レジスタを見にくるので、そのタイミングで実デバイスから Device Masquerading Underlay が情報を取り出し、 Function Kernel に処理を戻す。
+
 \subsection{制御}
 %\section{Exitless Device Masquerading の仕組み}
 
