@@ -58,7 +58,10 @@
 \usepackage{tikz}
 \usepackage{tikzscale}
 \usetikzlibrary{shapes.multipart,positioning}
+\usetikzlibrary{arrows}
 \usetikzlibrary{arrows.meta}
+\usetikzlibrary{positioning}
+
 \tikzset{
     font=\ttfamily,
     BLOCK/.style={
@@ -322,7 +325,7 @@ Device Masquerading Underlay は実際のデバイスを制御しつつ、 virti
 \begin{figure}[htbp]
   \begin{center}
     \includegraphics[width=.7\textwidth]{./underlayzerocpy.eps}
-    \caption{Device Underlay Architechture}
+    \caption{Zerocopy Device Underlay Architechture}
     \label{underlayzerocpy}
   \end{center}
 \end{figure}
@@ -400,14 +403,14 @@ ACPI テーブルとは、電源管理やデバイスツリーの管理のため
 Device Masquerading Underlay も BitVisor の技法を踏襲し、 EPT およびメモリマップの構造を取得する命令のインターセプトを用いて Function Kernel からの破壊を防ぎ、セキュリティを担保している。
 
 \subsection{virtio デバイスの実装上の技法}
-
+\label{overview_vio}
 一般のハイパーバイザは virtio デバイスをゲストに提供するに当たって新しく作り、 virtio デバイスとして振る舞うエミュレータがアプリケーションとして動作するため、それぞれのハイパーバイザが動作するオペレーティングシステムでのネットワーク通信用のブリッジなどと通信すればよい。しかし本論文での実装では、一つの実在するハードウェアに相当する virtio デバイスを作成し関連付けるので、より効率的な作成方法が考えられる。
 
 この方法を順を追って説明する。
 
 \begin{enumerate}
 \item 後述のように Masquerading の対象となるデバイスを発見する
-\item その PCI configuration 空間に virtio の PCI configuration 空間として有効なものとなるようフック関数を用意する (PCI configuration 空間については後述する)
+\item その PCI configuration 空間に virtio の PCI configuration 空間として有効なものとなるようフック関数を用意する (PCI configuration 空間については\ref{about_pciconfig}章で後述する)
 \item Function Kernel は BAR と呼ばれる領域のビットマスクを最初に読み出すので適切な値をフック関数で返す
 \item のちにそれぞれのデバイスに相当するデバイスドライバを割り振るために Vendor ID と Device ID を読み出す必要があるので、これを virtio のものにする
 \item Function Kernel はそれぞれのデバイスに相当するドライバが確定すると、その固有のドライバをアサインするので virtio の規格に則り各フィールドを適切な値として返す
@@ -519,6 +522,7 @@ EPT とは、 Extended Page Table の略称で、 Second Level Address Translati
   \draw[-{Stealth[scale=1.3,angle'=45]}] (CR3) -- (table1.one west);
 \end{tikzpicture}
 \end{scaletikzpicturetowidth}
+  \caption{ページディレクトリ方式のページテーブルでのアドレス変換の概略図}
   \end{center}
 \end{figure}
 
@@ -534,24 +538,140 @@ EPT とは、 Extended Page Table の略称で、 Second Level Address Translati
 		\input{ept.tikz}
 	}
   \end{center}
+  \caption{ページテーブルとEPTを組み合わせたアドレス変換の概略図}
 \end{figure}
 
 これを行うことで、仮想化ゲストのオペレーティングシステムはハイパーバイザを配慮してメモリを配置したり、あるいはハイパーバイザがゲストのオペレーティングシステムの CR3 を監視して、プロセスが代わるたびに CR3 をセットしたりする必要がなくなった。
 
 ゲストは一般のハードウェアの上で動作しているという前提でアドレス空間を利用してよいし、またそのアドレス空間が物理的にどこにマップされるかはハイパーバイザが決定することが出来るようになった。
 
-Intel の仮想化支援機構では、 VMCS と呼ばれる仮想化ゲストが発行出来る命令やその他の様々な制御用構造体が用意されていて、これをセットアップすることで仮想マシンを作ることが出来るが、 EPT によるアドレス変換の際のエラーハンドリングや、 IO 命令発行時のハンドリングなどをする際には、それらが終了理由になるようにし、 \texttt{vmlaunch} 及び \texttt{vmresume} 命令により、セットアップした VMCS を実際にゲストとして実行してからそのコンテキストが終了するまで待つと、こうしたイベントをフック出来るようになる。
+Intel の仮想化支援機構では、 VMCS と呼ばれる仮想化ゲストが発行出来る命令やその他の様々な制御用構造体が用意されていて、これをセットアップすることで仮想マシンを作ることが出来る。 EPT によるアドレス変換の際のエラーハンドリングや、 IO 命令発行時のハンドリングなどをする際には、それらが終了理由になるようにし、 \texttt{vmlaunch} 及び \texttt{vmresume} 命令により、セットアップした VMCS を実際にゲストとして実行してからそのコンテキストが終了するまで待つと、こうしたイベントをフック出来るようになる。
+
+EPT やページテーブルのエントリには、次のテーブル(ディレクトリ)へのポインタの他に制御用のビットフィールドがあり、これによってページのサイズやエラー時に起きるべき例外の選択などが出来る。
 
 \section{virtio の仕様について}
-\section{PCI device discoveryについて}
+
+virtio は準仮想化デバイスのデファクトスタンダードとして広く用いられており、ライブラリ OS のライブラリでもサポートされる数少ないデバイスである。
+
+この規格では、デバイスをその動作の種別によっていくつかのデバイスクラスに分けている。最もよく知られたものに virtio-net と呼ばれるネットワーククラスがある。今回はこれを proof-of-concept の実装として対象にした。このクラスは最もよく知られ、広く利用されているだけでなく、パフォーマンスの測定に便利だという特徴がある。この他のデバイスクラスとして、コンソールやブロックデバイス、ビデオカードなどが挙げられる。
+
+デバイスは起動時の検索によって発見されなければならないが、 virtio 自身はその方法を定めていない。 virtio デバイスは、以下の 3 つのバス規格のうち 1 つを利用することになっている。
+
+\begin{itemize}
+\item PCI
+\item MMIO
+\item Channel-IO
+\end{itemize}
+
+このうち、 Channel-IO は IBM の専用のハードウェアを前提にしたもので、今回は実装の対象ではない。また、 MMIO の場合はそもそもバスというよりは PCI のようなデバイス検索の機能を持つハードウェアを利用できない組み込みプラットフォームなどを対象にしたもので、 MMIO 空間のどこにマップされるか予め管理者が入力しておくというものだ。これは不便で、 PCI が使える場合には使われず、あまり知られていないので今回は実装の対象としない。
+
+今回は PCI バスでドライブされる virtio デバイスを作成することとした。これは最もよく知られた規格で、 ACPI によって PCI バスは列挙されているのでデバイス検索が可能であり、 Function Kernel の可移植性を引き上げることが出来る。
+
+一般にこの場合 virtio デバイスとして振る舞う PCI configuration 空間を作成する必要があるが、本研究で提案するアーキテクチャの場合、新たにデバイスを作り出すのではなく既存のデバイスを Function Kernel からみて virtio デバイスとして振る舞わせ、利用させるので、既存のデバイスの PCI コンフィギュレーション空間を活用すれば良い。
+
+\subsection{PCI configuration 空間について}
+\label{about_pciconfig}
+
+このサブセクションでは、デバイスを使うゲスト上のソフトウェアをドライバ、 virtio デバイスを含む PCI デバイスをデバイスと呼ぶ。
+
+PCI configuration 空間とは、 PCI デバイス固有のアドレス空間で、 0x00 番地から 0xff 番地までが利用できる。このうち特に 0x00 番地から 0x3f 番地まではそれぞれのフィールドの意味が決まっている。
+
+ここで、特に説明に必要なフィールドについて先に列挙する。
+
+\begin{itemize}
+\item Vendor ID
+\item Device ID
+\item BAR[0..5]
+\item Subsystem Vendor ID
+\item Subsystem ID
+\item Capability pointer
+\end{itemize}
+
+ここで、 BAR とは、\ref{overview_vio}章ですでに触れた BAR のことである。 VendorID と Device ID は適切なデバイスドライバを発見するために必要なもので、デバイスの製品ごとに固有のものだ。これについてもすでに触れた。Subsystem Vendor ID や Subsystem ID も Vendor ID や Device ID と同じ機能を持つ。
+
+Capability とは、 PCI configuration 空間で予め定められたフィールド以外の設定をデバイスが通知したい時に、 PCI configuration 空間内に linked list を作ることになっているが、そのリストの head を指す番地が入るのが Capability pointer である。
+
+BAR はドライバとデバイス双方が読み書きする32bitの領域だ。ここでアドレスなどがやり取りされることが多い。 BAR は Base Address Register の略で、ここにかかれた値が具体的に何に使われるのかは定められていないが、メモリ上のなんらかの構造体へのポインタをやり取りして、その構造体を用いてデバイスとドライバがコミュニケーションすることが多い。 virtio も同様に BAR に virtio 固有の設定をするための構造体を示すアドレスがドライバからかかれることになっている。このような使い方をする際、単純にどのようなアドレスがデバイスに支給されても必ず使えるとは限らない。 PCI はプラットフォームに非依存の規格であるから、例えばバイトアドレッシングに対応していないデバイスで、下位 2bit が 00 でなければ動作しないデバイスや、キャッシュを跨いでいると使えないデバイス、あるいは DMA の都合上一定のアドレス領域でなければならないということがありえる。このような場合に備え、 BAR へ書くことができるアドレスを調べる方法が用意されている。 BAR に書けないビットは何を書いても同じ内容しか読み出せないはずである。ということは、まず全ビットを 0 にして書き込み、読み出してからまた全ビットを 1 にして書き込んで読み出して比べると、書き込めるビットが分かる。
+
+また、 BAR の下位 2bit あるいは 4bit には意味がある。下位 1 bit
+(\tikz{ \draw (0,0) rectangle (3.2,1.3ex); \filldraw[fill=red!40!black, draw=black] (3.1,0) rectangle (3.2, 1.3ex); \node at (3.15, 2ex){\small{1}}})
+が 1 であった場合、その BAR にかかれた値は PIO 空間へのポインタとなる。その場合、 2 bit
+(\tikz{ \draw (0,0) rectangle (3.2,1.3ex); \filldraw[fill=red!40!black, draw=black] (3,0) rectangle (3.1, 1.3ex); \node at (3.05, 2ex){\tiny{\times}}})
+めは予約領域である。下位 1bit
+(\tikz{ \draw (0,0) rectangle (3.2,1.3ex); \filldraw[fill=red!40!black, draw=black] (3.1,0) rectangle (3.2, 1.3ex); \node at (3.15, 2ex){\small{0}}})
+が 0 であった場合、その BAR にかかれた値はメモリ空間へのポインタとなる。その場合、そこから数えて上位 2bit
+(\tikz{ \draw (0,0) rectangle (3.2,1.3ex); \filldraw[fill=red!40!black, draw=black] (2.8,0) rectangle (3.1, 1.3ex); \node at (2.95, 2ex) {\small{??}} })
+はアドレスの大きさを指し、その次のビット
+(\tikz{ \draw (0,0) rectangle (3.2,1.3ex); \filldraw[fill=red!40!black, draw=black] (2.7,0) rectangle (2.8, 1.3ex); \node at (2.75, 2ex) {\small{?}}})
+はプリフェッチ可能か示すビットである。
+
+ここで指定されたアドレスには、一体どのような構造体がくるのだろうか。実は virtio では、ここで交換すべき情報として 5 つの構造体が定義されている。 BAR には 6 つのエントリがあるが、これを対応させるのは capability list で行う。
+
+\subsection{virtio の capability list について}
+
+これら 5 つの構造体の種別と BAR 番号をひもづける capability list の構造は virtio の規格で決まっている。
+
+そもそも capability list とは以下のようなもので、特にその capability のエレメントがどのような意味をもつのかを表す \texttt{ID} と 次のエレメントへのポインタはどの capability であっても必ず書いてあり、それぞれのオフセットは 0 と 1 である。リストの最後の要素は、次のエレメントへのポインタとして 0 と書いてなければならない。
+
+\begin{figure}[htbp]
+  \begin{center}
+\begin{scaletikzpicturetowidth}{.9\textwidth}
+\begin{tikzpicture}[scale=\tikzscale, ->, >=stealth', every node/.append style={draw}]
+  \node (cfg)
+            [rectangle split, rectangle split parts=10, draw]
+     {  \nodepart{one} \textbf{PCI configuration 空間}
+       \nodepart{four} \footnotesize{:}
+       \nodepart{five} \footnotesize{:}
+       \nodepart{six} \footnotesize{Capability ptr}
+    };
+  \node (cap1) 
+            [rectangle split, rectangle split parts=6, draw, right=2 of cfg]
+            {\nodepart{one} \hypertarget{cap1}{\textbf{Capability エレメント}}
+       \nodepart{two} \footnotesize{ID}
+       \nodepart{three} \footnotesize{次のエレメントへのポインタ}
+       \nodepart{four} \footnotesize{長さ}
+       \nodepart{five} \footnotesize{種別}
+       \nodepart{six} \footnotesize{BAR 番号}
+    };
+  \node (cap2)
+            [rectangle split, rectangle split parts=6, draw, below=3 of cap1] 
+     {  \nodepart{one} \textbf{Capability エレメント}
+       \nodepart{two} \footnotesize{ID}
+       \nodepart{three} \footnotesize{次のエレメントへのポインタ}
+       \nodepart{four} \footnotesize{:}
+    };
+  \node (cap3)
+            [rectangle split, rectangle split parts=6, draw, left=2 of cap2] 
+     {  \nodepart{one} \textbf{Capability エレメント}
+       \nodepart{two} \footnotesize{ID}
+       \nodepart{three} \footnotesize{次のエレメントへのポインタ}
+       \nodepart{four} \footnotesize{:}
+    };
+   \node (zero) [draw, circle, left=1 of cap3] {0};
+  \path[every node/.style={font=\sffamily\small}]
+    (cfg.six east) edge[bend left] node [right] {} (cap1.one west)
+  (cap1.three east) edge[bend left] node [right] {} (cap2.one east)
+  (cap2.three west) edge[bend right] node [right] {} (cap3.one east)
+  (cap3.three west) edge node [right] {} (zero)
+  ;
+\end{tikzpicture}
+\end{scaletikzpicturetowidth}
+  \caption{Capability list}
+  \end{center}
+\end{figure}
+
+ここで、\hyperlink{cap1}{最初の capability エレメント}は、 virtio の capability list の形をしている。
+
 \section{virtqueue の仕様について}
+
+virtqueue とは、
+
 \section{virtio-net の仕様について}
 
-\section{Exitless Device Masquerading の仕組み}
+%\section{Exitless Device Masquerading の仕組み}
 \section{送信時の動作}
 \section{受信時の動作}
 \section{制御}
-
 
 \chapter{評価}
 
