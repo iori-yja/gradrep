@@ -899,48 +899,49 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
 
 この事象に関する仮説として、おそらく Linux の割り込みハンドリングの仕組みによるものだということが出来る。
 
-Linux では、割り込みがくるとその原因を調べ、原因をクリアしてから適切なハンドラを選択し登録する。その後、そのハンドラを適切なタイミングで実行する(top/bottom half)。そこで考えられる Linux の 1 GbE ドライバの挙動を示す。
+Linux では、割り込みがくるとその原因を調べ、原因をクリアしてから適切なハンドラを選択し登録する。その後、そのハンドラを適切なタイミングで実行する(top/bottom half)。そこで考えられる Linux の 1 GbE ドライバの受信時の推測される挙動を示す。スループットのベンチマークで判明したとおり、ネットワークデバイスの IO がボトルネックであることから、 PRO/1000 のリングバッファからイーサネットフレームを取り出す箇所が特に遅いと仮定する。
+
+さらに、 Device Masquerading Underlay を用いた場合の Function Kernel, Device Masquerading Underlay, そしてデバイスの推測される挙動も示す。これも上記の仮定を踏まえて作図した。ただし、 virtqueue のバッファは Function Kernel が管理しているメモリ領域であり、 Device Masquerading Underlay が virtqueue への書き込みを完了した時点でイーサネットフレームはすでに Function Kernel 内にコピーされているので、 Function Kernel 内の Bottom Half 処理はすぐに終了する。
 
 \begin{landscape}
 \begin{figure}[htbp]
   \thispagestyle{plain}
-\begin{minipage}{0.4\hsize}
+\begin{minipage}{\hsize}
   \begin{center}
-\begin{tikzpicture}[->, >=stealth']
+\begin{tikzpicture}[scale=1, ->, >=stealth']
   % Fside
-  \coordinate (epoc) at (-1, 0);
-  \coordinate (inevent2) at (-1, -1.4); \node [align=left, left=1ex of inevent2] {割り込み受理};
-  \coordinate (ineventend) at (-1, -2); \node [align=left, left=1ex of ineventend] {割り込みレジスタをクリア};
-  \coordinate (bottomhalf) at (-1, -7);  \node [align=left, left=1ex of bottomhalf] {Bottom Half を開始};
-  \coordinate (bottomhalf2) at (-1, -7.5);  \node [align=left, left=1ex of bottomhalf2] {Bottom Half処理};
-  \coordinate (bottomhalfend) at (-1, -11.5);  \node [align=left, left=1ex of bottomhalfend] {Bottom Half処理完了};
+  \coordinate (kkepoc) at (-12, 0);
+  \coordinate (kkinevent2) at (-12, -1.4); \node [align=left, left=1ex of kkinevent2] {割り込み受理};
+  \coordinate (kkineventend) at (-12, -2); \node [align=left, left=1ex of kkineventend] {割り込みレジスタをクリア};
+  \coordinate (kkbottomhalf) at (-12, -7);  \node [align=left, left=1ex of kkbottomhalf] {Bottom Half を開始};
+  \coordinate (kkbottomhalf2) at (-12, -7.5);  \node [align=left, left=1ex of kkbottomhalf2] {Bottom Half処理};
+  \coordinate (kkbottomhalfend) at (-12, -11.5);  \node [align=left, left=1ex of kkbottomhalfend] {Bottom Half処理完了};
 
   % Dside
-  \coordinate (epoc2) at (1, 0);
-  \coordinate (inevent) at  (1, -1);   \node [align=right, right=1ex of inevent] {受信};
-  \coordinate (clearreg) at (1, -2.5); \node [align=right, right=1ex of clearreg] {クリア完了};
-  \coordinate (copy) at (1, -8); \node [align=right, right=1ex of copy] {受信処理開始};
-  \coordinate (copy2) at (1, -11); \node [align=right, right=1ex of copy2] {受信処理完了};
-  \coordinate (end) at (-1, -12);
-  \coordinate (end2) at (1, -12);
-  \draw[->] (epoc) -- (end);
-  \draw[->] (epoc2) -- (end2);
-  \node [above=1ex of epoc] {OS};
-  \node [above=1ex of epoc2] {Device};
-  \draw[->] [draw=blue] (inevent) -- (inevent2);
-  \draw[->] [draw=blue, decorate, decoration={snake}] (inevent2) -- (ineventend);
-  \draw[->] [draw=blue, decorate, decoration={snake}] (bottomhalf) -- (bottomhalf2);
-  \draw[->] [draw=red] (ineventend) -- (clearreg);
-  \draw[->] [draw=red] (bottomhalf2) -- (copy);
-  \draw[->] [draw=blue, decorate, decoration={snake}] (copy) -- (copy2);
-  \draw[->] [draw=red] (copy2) -- (bottomhalfend);
-\end{tikzpicture}
-\caption{PRO/1000に対する Linux の挙動 (baremetal)}
-  \end{center}
-\end{minipage}
-\begin{minipage}{0.4\hsize}
-  \begin{center}
-\begin{tikzpicture}[->, >=stealth']
+  \coordinate (kkepoc2) at (-10, 0);
+  \coordinate (kkinevent) at  (-10, -1);   \node [align=right, right=1ex of kkinevent] {受信};
+  \coordinate (kkclearreg) at (-10, -2.5); \node [align=right, right=1ex of kkclearreg] {クリア完了};
+  \coordinate (kkcopy) at (-10, -8); \node [align=right, right=1ex of kkcopy] {受信処理開始};
+  \coordinate (kkcopy2) at (-10, -11); \node [align=right, right=1ex of kkcopy2] {受信処理完了};
+  \coordinate (kkend) at (-12, -12);
+  \coordinate (kkend2) at (-10, -12);
+  \draw[->] (kkepoc) --  (kkend);
+  \draw[->] (kkepoc2) -- (kkend2);
+  \node [above=1ex of kkepoc] {OS};
+  \node [above=1ex of kkepoc2] {Device};
+  \draw[->] [draw=blue] (kkinevent) -- (kkinevent2);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (kkinevent2) -- (kkineventend);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (kkbottomhalf) -- (kkbottomhalf2);
+  \draw[->] [draw=red] (kkineventend) -- (kkclearreg);
+  \draw[->] [draw=red] (kkbottomhalf2) -- (kkcopy);
+  \draw[->] [draw=blue, decorate, decoration={snake}] (kkcopy) -- (kkcopy2);
+  \draw[->] [draw=red] (kkcopy2) -- (kkbottomhalfend);
+%\end{tikzpicture}
+%  \end{center}
+%\end{minipage}
+%\begin{minipage}{0.6\hsize}
+%  \begin{center}
+%\begin{tikzpicture}[scale=1, ->, >=stealth']
   % Fside
   \coordinate (epoc) at (-2, 0);
   \coordinate (inevent2) at (-2, -1.4); \node [align=left, left=1ex of inevent2] {割り込み受理};
@@ -977,25 +978,80 @@ Linux では、割り込みがくるとその原因を調べ、原因をクリ�
   \draw[->] [draw=blue, decorate, decoration={snake}] (copy) -- (copy2);
   \draw[->] [draw=red] (copy2) -- (clearend);
 \end{tikzpicture}
-\caption{PRO/1000に対する Device Masquerading Underlay と Function Kernel の挙動}
+\caption{(左) PRO/1000に対する Linux の挙動 (baremetal)}
+\caption{(右) PRO/1000に対する Device Masquerading Underlay と Function Kernel の挙動}
   \end{center}
 \end{minipage}
 \end{figure}
 \newpage
 \end{landscape}
 
+今回の実験結果がこの仮説によるものならば、はからずも \texttt{vmx-root} と \texttt{vmx-nonroot} の分離を行ない、それぞれを保護しながら並列実行する デバイスドライバが出来ていたことになる。このようにして IO 負荷を Function Kernel から Device Masquerading Underlay へオフロードし、結果として速い応答速度を獲得していたこととなる。
 
-また、
-
-%\subsection{UDP}
 %\section{Broadcomm 1GbEでの性能}
-%\subsection{UDP}
-%\subsection{TCP}
 %\section{Intel 10GbEでの性能}
-%\subsection{UDP}
-%\subsection{TCP}
+
+\section{セキュリティ}
+
+本論文での、セキュリティへの貢献は、オペレーティングシステムのカーネル一般のような比較的大きなソフトウェアから attack surface のより小さいソフトウェアにデバイスドライバを移すことで、恒久的な破壊などを主とした攻撃を防ぐというものである。
+
+そこで、仮に LOC 数がセキュリティ上の欠陥に比例関係を持っていると仮定し、 Device Masquerading Underlay の LOC 数と一般的なオペレーティングシステムのカーネルの LOC 数とを比較し、これをセキュリティ上の指標としたいと思う。
+
+本論文では、元になったソースコードも含めすべての機能全体で215 kLOCとなっている。それに対し、例えば Linux のソースコードはデバイスドライバを除いて 7.13 MLOCある。それに対し、 Device Masquerading Underlay の実装は、 virtio デバイスを作成する箇所やデバッグシェルを除くとほとんどユーザやオペレーティングシステムからの入力を受け付けないので、その分 attack surface が小さいと言える。また、保護機構についても、オペレーティングシステムで使われる Ring 保護だけでなく、 EPT/VMCS でのセキュリティ強制機構も同時に働いているため、ハードウェアの不揮発性レジスタなどのアクセスによる破壊を防ぐことが出来る。
+
+前年度の本研究室での先行調査によれば、デバイスへの入力をファジングしている際\cite{fuzzbisor}、ラップトップコンピュータが起動しなくなることがあった。これによって偶発的に見つかった問題は、イーサネットコントローラの不揮発メモリ領域と BIOS の不揮発メモリ領域が参照するフラッシュデバイスが同じものである製品が市場に出回っており、これによってイーサネットコントローラのドライバの不具合や悪意のある侵入者によって、そうしたコンピュータが破壊されてしまうというものだ。
+
+本論文の実装にあたって、ネットワークインターフェースの隠蔽・ virtio 化の際に、当該のネットワークインターフェースの PCI configuration 空間の BAR[4] にある不揮発メモリ領域を操作するためのデバイスへのポインタを上書きしているので、この問題は Device Masquerading Underlay を使うと未然に防ぐことが出来る。
 
 \chapter{結論}
+\section{まとめ}
+
+本研究では、新しいオペレーティングシステムのデザインを提案し、 Proof-of-Concept となる実装を開発した。この新しいオペレーティングシステムアーキテクチャは、デバイスドライバからなる Device Masquerading Underlay と、他の一般的な機能を提供する上位レイヤの Function Kernel からなる二層構造を持っている。 Function Kernel 既存のオペレーティングシステムが使える上に、 Function Kernel として使われるソフトウェアが変わっても Device Masquerading Underlay は再利用できるようにするため、既に知られているような、デバイスを制御して抽象的なデータに変換するデバイスドライバではなく、個別のデバイスを標準規格で定められた高速で簡潔な仮想デバイスに変換する「デバイス---デバイス変換」を元にした新しいデバイスドライバフレームワークを提案し、この技法を Device Masquerading と名づけた。このアーキテクチャが一般に普及した場合のメリットを以下に挙げる。
+
+\begin{itemize}
+\item オペレーティングシステムという単一の巨大なシステムソフトウェアから、異なるレイヤの機能を提供する箇所を分離し、関心の分離を図ることができる
+\item デバイスドライバを分離し、より複雑な機能を持ちうる Function Kernel からデバイスを保護することで、永久破壊に繋がる攻撃パスが可能な attack surface の極小化が可能となる
+\item デバイスドライバの抽象化方法として新規のメソッドを提案し、これによりデバイスドライバのオペレーティングシステムに対する独立性を大きく引き出す
+\item デバイスドライバのオペレーティングシステムに対する依存性を下げたことでオペレーティングシステムごとにデバイスドライバを開発する必要がなくなり、デバイスドライバの開発に集中的なリソースを割くことが出来る
+\item デバイスドライバの開発リソースを纏められるようにしたことで、オペレーティングシステム開発の参入障壁が下がり、新しいオペレーティングシステムが実用に耐えうるものとなりやすくなった
+\item オペレーティングシステムによらず単一のデバイスドライバを使えるようになったことで、デバイスドライバの潜在的なバグが発見されやすくなる
+\end{itemize}
+
+また、このレイヤの導入によっても性能が決して大きく劣化することはないばかりか、条件によってはより高速になる事例があることが明らかとなった。
+
+\section{今後の発展}
+
+\subsection{対応デバイスクラスの追加について}
+
+本研究では主にネットワークインターフェースをターゲットに実証試験を行った。これにはいくつかの理由がある。
+
+第一に、ネットワークインターフェースは特に他の普及したインターフェースに比べても統一性のないもので、デバイスドライバの開発コストが特に高いということが挙げられる。第二に、ネットワークインターフェースとして virtio を使うオペレーティングシステムは既に多く知られていて、 virtio が定義するいくつかのデバイスクラスの中でも突出して有名である点が挙げられる。また第三に性能評価の指標が明らかで、本実装の優位性を主張しやすいという点があった。
+
+\subsubsection{ブロッククラス}
+
+しかし、実際にオペレーティングシステムの動作に不可欠なデバイスクラスはこれだけではない。ネットワーククラスの次に注目されるデバイスクラスとして、ブロックデバイスが挙げられる。ブロックデバイスは伝統的には AHCI 、 SATA や SAS といった統一規格があり、デバイスドライバの開発コストを特に高めている要因ではあまりなかったが、近年のフラッシュメモリを用いた高速ストレージの台頭によって、 NVMe 、 M.2 、 U.2 、 Persistent Memory などの規格がこれに加わり、こんにちではすでに決してストレージのデバイスドライバも容易だとは言えなくなっている。 virtio にも、ブロックデバイスに相当するデバイスクラスとして、一般的なブロックデバイスと、 Out-of-Order で通信できる SCSI クラスの二つがある。ストレージに対する Device Masquerading の開発動機は高いといえよう。
+
+\subsubsection{グラフィックスについて}
+
+また、 virtio にはさらに、グラフィックドライバや memory ballooning などが定義されている。グラフィックドライバの開発は商業的な環境によりドキュメントが少なく困難を極めるため Device Masquerading を行なうことも困難と言えるが、こちらは QXL と既存のオペレーティングシステムとの何らかのブリッジを作るなどの手法を考案すると可能になるかもしれない。このアプローチは Le Vasseur らの先行研究\cite{reuse}に近い。
+
+\subsubsection{Memory ballooningクラス}
+
+Memory ballooning は、起動した仮想マシンに対して後からメモリを追加するための機構だが、仮想マシンに限らずオペレーティングシステム一般に対しても、メモリホットスワッピングなどと組み合わせて何らかの意味を与えれば便利な機構を提案できる可能性がある。
+
+\subsection{Function Kernel の組み合わせについて}
+
+本研究では、すでに普及した virtio の古い規格ではなくあえて昨年中に規格の策定が進行中であった virtio 1.0 を対象に実装を行った。これは後述する Exitless Device Masquerading という技法を開発するためだが、 virtio 1.0 の規格はまだ草稿段階で、最新版は昨年の 10 月に発表されているなど、まだ途上の段階の規格といえる。理論上はほとんどどのようなオペレーティングシステムであっても Function Kernel として使えるとしたが、この事情により、まだ対応しているオペレーティングシステムは少ない。
+
+Virtio の古い規格には非常に多くのオペレーティングシステムが対応しているため、多くのオペレーティングシステムが今年中にも新しい規格にも対応することが予想される。例えば、昨年冬に発表された新しいライブラリ OS である IncludeOS\cite{includeos} の開発サイト\cite{incosdev} でも virtio 1.0 の開発が今なされていると宣伝されている。これからの開発が待たれる。
+
+\subsection{Exitless Device Masquerading}
+
+ドライバがデバイスへ通知した際や割り込み原因を調べた際、 Device Masquerading Underlay がフックするということは既に述べた。しかしフックのために \texttt{vmx-nonroot} から \texttt{vmx-root} へコンテキストスイッチが起きる。将来的にさらに高速なデバイスに対応する際、このコンテキストスイッチが性能に影響を与える可能性がある。そこで Exitless Device Masquerading という技法を提案する。
+
+Exitless Device Masquerading では、 \#VE という例外を使うことがキーアイディアとなる。
+
+EPT でのアドレス変換の結果、適切なページが見つからないと Device Masquerading Underlay にコンテキストスイッチするという仕様を利用して今まではフックしていたが、 EPT ではアドレス変換の結果見つかったページへのポインタを持つエントリに \#VE 例外を発生させることを表すビットが有効になっていると、この例外が発生し、コンテキストスイッチの代わりに Function Kernel への例外が発生する。ここに例外ハンドラを Device Masquerading Underlay があらかじめ用意し、このハンドラで EPTP スイッチを発行することで、アドレス空間のみを Device Masquerading Underlay に移すことができる。これにより、完全なコンテキストスイッチよりも高速に制御を移すことができる。
 
 \appendix
 \chapter{実験環境について}
