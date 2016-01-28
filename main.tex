@@ -196,9 +196,7 @@ keywords = {BitVisor, Hypervisor, OS Design, libraryOS, embedded computing, OS n
 
 \chapter{序論}
 
-\section{背景}
-
-\subsection{デバイスドライバの問題点}
+\section{既存のデバイスドライバの問題点}
 近年、オペレーティングシステムのアーキテクチャは転換期をむかえている。その要因として、モバイル・ IoT の普及とともに、オペレーティングシステムの低消費電力化と同時に多様なデバイスに対応しなければならなくなってきているほか、ハイパフォーマンスコンピューティング環境の巨大化によって、よりオペレーティングシステムへの性能要求は高まっている。しかしながら、同時にオペレーティングシステムの開発コストは年々上がっている。その理由として、多様な SoC やデバイスの普及によって、デバイスドライバの開発コストは年々上がっているという点が挙げられる。デバイスドライバは歴史的にオペレーティングシステムの不具合の原因の最たるもので\cite{oserrors}、近年改善されているとはいえ、頻度・件数ともに主要因の一つでありつづけている\cite{faults}。また、オペレーティングシステムの開発コストもデバイスドライバは支配的な存在となっている。このことを示すためにコード行数ベースで比較すると、一例として linux の mainline(1 月 13 日時点での最新)全体に対するデバイスドライバの占める割合は 1884 万行中 1171 万行で 62.2\% となっている。この問題はデバイスドライバが各オペレーティングシステム間で再利用できないことによる。
 
 また、ライブラリ OS の研究がここ数年で盛んになっていて実際に民用においても使われ始めているが、多くのライブラリ OS の実行環境は伝統的なオペレーティングシステムの上に限定されていて、ライブラリ OS のパフォーマンスが引き出せるとは限らない。ライブラリOSではカーネルをライブラリとしてリンクし、実行ファイルでありながら同時にオペレーティングシステムとして動作するもので、仮想化環境の中で動作させることを前提に、仮想ハードウェアの性能を引き出すことを目的にしているが、もしこれが実際のハードウェアを占有して動作することができれば、より高い性能改善が期待できる。また、コンパイルされてリンクされたライブラリOSのライブラリとアプリケーションは、様々な利点が指摘されているものの、同時に、メンテナンスするためにコンパイルしなければならないという問題点があげられる。負荷の変動によって実行環境をライブマイグレーション\cite{livemgrt}などを用いて移すことは出来るものの、通常の OS のように直接ハードウェアの上で実行するためにはそれぞれのライブラリにドライバを導入し再リンクしなければならないという困難があり、現実的ではない。%本論文で提案する Device Masquerading Underlay を用いれば、ライブラリ OS ですでに利用が進んでいる virtio という準仮想化デバイスとして実際の様々なハードウェアを利用できるようになる。
@@ -209,12 +207,13 @@ keywords = {BitVisor, Hypervisor, OS Design, libraryOS, embedded computing, OS n
 
 上記の問題はデバイスドライバの共有化が進んでおらず、それぞれのオペレーティングシステムでデバイスドライバの開発を別々に行わなければならないという点や、それぞれのデバイスがそれぞれのアクセスメソッドを持っていて、統一化されていないという点によって生じている。そこでデバイスドライバをハイパーバイザにオフロードすることで、オペレーティングシステムの開発という、様々な機能の実装を連携して進めなければならなかったものからデバイスドライバの開発を分離し関心の分離を図る。また、この分離によって、仮にオペレーティングシステムの脆弱性を利用して任意の特権コードが実行できるようになっても実デバイスの代わりに仮想デバイスを提供していることによって実際の有効な破壊を未然に防ぐことができるようになる。
 
-そのために本論文では Device Masquerading という技法とそれを利用したハイパーバイザを提案し、これを利用し、包括的に捉えた新しいオペレーティングシステムアーキテクチャについて議論する。
+そのために本論文では Device Masquerading という技法とそれを利用したハイパーバイザを提案し、これを利用することでデバイスとシステムソフトウェアの関係を包括的に捉えなおす新しいオペレーティングシステムアーキテクチャについて議論する。
 
 具体的には、オペレーティングシステムの機能を、デバイスドライバのようなハードウェアとのインターフェース部分と、ファイルシステムやプロセス管理などのソフトウェア部分を分離し、前者を Device Masquerading Underlay, 後者を Function Kernel と呼ぶ。この二つは virtio と呼ばれる共有メモリのリングバッファの標準規格を通して通信する。
-Device Masquerading Underlay は Function Kernel に対して非依存であるため、これが提供するデバイスドライバを複数のオペレーティングシステムが利用できるようになる。
-また、 virtio という標準規格を用いるので既存のオペレーティングシステムがそのまま Function Kernel として利用できる。
-さらに、この実装を Parapass-through Hypervisor である BitVisor を元に行い、性能評価を行う。
+
+Device Masquerading Underlay は Function Kernel に対して非依存であるため、これが提供するデバイスドライバを複数のオペレーティングシステムが利用できるようになる。また、 virtio という標準規格を用いるので既存のオペレーティングシステムがそのまま Function Kernel として利用できる。この仕様に則ったアクセスメソッド以外の操作を必要としないので、複数のインスタンスを起動させることが主目的であるハイパーバイザで必要になる煩雑な設定が必要ない。また attack surface を極力小さく抑えることができる。
+
+さらに、この実装を Parapass-through Hypervisor である BitVisor を元に行い、性能評価を行った。その結果、レイヤが増えているにも関わらず、性能はほとんど変わらず、むしろ改善する場合もあった。とくに応答速度は、virtio デバイスを提供する既存の Type II 型 VM である KVM は遅くなるのに対し、 Device Masquerading Underlay はむしろ速くなるということがあきらかになった。
 
 \chapter{設計と技法}
 
@@ -799,7 +798,7 @@ Used リングバッファに格納された使用済ページは Function Kerne
 
 今回実装した \tikz[baseline=-0.5ex]{\node(v){virtio};\node(r)[right=1cm of v]{実デバイス};\draw[<->] (v) -- (r);} 変換の性能を評価するため、ネットワークの速度評価で知られる netperf と ping で実験を行った。
 
-また、本研究での実装で、性能に影響を与える可能性があるパラメータとしてキューのサイズが挙げられる。キューが小さすぎると性能が悪化することは上記のとおりだ。そこで様々なキューのサイズで試行した。しかし、使用済のキューの廃棄は簡単であり、今回 Function Kernel として用いた Linux 4.4.0 では適切にハンドリングしているので、キューのサイズによる性能の劣化は見られなかった。
+また、本研究での実装で、性能に影響を与える可能性があるパラメータとしてキューのサイズが挙げられる。キューが小さすぎると性能が悪化することは上記のとおりだ。そこで様々なキューのサイズで試行した。しかし、使用済のキューの廃棄は簡単であり、今回 Function Kernel として用いた Linux 4.4.0 では適切にハンドリングしているので、キューのサイズによる性能の劣化は見られなかった。また、 Zero-copy 化の最適化を施しても性能は改善しなかった。メモリコピーよりもより大きなボトルネックがあることが推測される。
 
 また、比較対象として baremetal と KVM に対して同様の実験を行った。
 
@@ -819,7 +818,7 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
       ybar,
       xlabel = DMUの有る/無し/KVMでのvirtio 及びDMUのキューのサイズ(単位は個),
       xmin = 0.5,
-      xmax = 9.5,
+      xmax = 10.5,
       ymin = 0,
       axis x line* = bottom,
       axis y line* = left,
@@ -831,8 +830,8 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
       bar width = 5mm,
       xticklabels = \empty,
       extra y ticks = {100,200,300,400,500,600,700,800, 900, 1000},
-      extra x ticks = {1,2,3,4,5,6,7,8,9},
-      extra x tick labels = {baremetal, qsz=512, qsz=1k, qsz=2k, qsz=4k, qsz=8k, qsz=16k, qsz=32k, KVM},
+      extra x ticks = {1,2,3,4,5,6,7,8,9, 10},
+      extra x tick labels = {baremetal, qsz=512, qsz=1k, qsz=2k, qsz=4k, qsz=8k, qsz=16k, qsz=32k, 0copy, KVM},
       ]
       \addplot+[mark=none, very thick] coordinates {
           (1,934.21)
@@ -843,7 +842,8 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
           (6,934.05)
           (7,933.53)
           (8,931.13)
-          (9,930.88)
+          (9,933.94)
+          (10,930.88)
       };
 \end{axis}
 \end{tikzpicture}
@@ -865,7 +865,7 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
       ybar,
       xlabel = DMUの有る/無し/KVMでのvirtio 及びDMUのキューのサイズ(単位は個),
       xmin = 0.5,
-      xmax = 9.5,
+      xmax = 10.5,
       ymin = 0,
       axis x line* = bottom,
       axis y line* = left,
@@ -876,8 +876,8 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
       yminorgrids = true,
       bar width = 5mm,
       xticklabels = \empty,
-      extra x ticks = {1,2,3,4,5,6,7,8,9},
-      extra x tick labels = {baremetal, qsz=512, qsz=1k, qsz=2k, qsz=4k, qsz=8k, qsz=16k, qsz=32k, KVM},
+      extra x ticks = {1,2,3,4,5,6,7,8,9, 10},
+      extra x tick labels = {baremetal, qsz=512, qsz=1k, qsz=2k, qsz=4k, qsz=8k, qsz=16k, qsz=32k, 0copy, KVM},
       ]
       \addplot+[mark=*, very thick, error bars/.cd, y dir=both,y explicit] coordinates {
           (1,145) +- (7, 7)
@@ -888,7 +888,8 @@ Virtio で用いる リングバッファのキューのサイズを変えて実
           (6,103) +- (12, 12) % 2000 
           (7,103) +- (13, 13) %4000
           (8,103) +- (16, 16) %8000
-          (9,222) +- (61, 62) %kvm
+          (9, 106) +- (11.5, 11.5)
+          (10,222) +- (61, 62) %kvm
       };
 \end{axis}
 \end{tikzpicture}
@@ -1064,6 +1065,8 @@ EPT でのアドレス変換の結果、適切なページが見つからない�
 
 ここで示す出力は\texttt{sudo lspci -xxxxvvvv} というコマンドで得ることが出来る。
 
+特に冒頭の Vendor ID や Device ID、それから capability list の違いが重要だ。
+
 \section{Intel PRO/1000}
 
 \small
@@ -1108,9 +1111,48 @@ f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 
 \section{virtio-netデバイス}
 \begin{verbatim}
+00:19.0 Ethernet controller: Red Hat, Inc Device 1041 (rev 04)
+        Subsystem: Red Hat, Inc Device 0041
+        Control: I/O+ Mem+ BusMaster+ SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+        Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+        Latency: 0
+        Interrupt: pin A routed to IRQ 20
+        Region 0: Memory at df200000 (32-bit, non-prefetchable) [size=4K]
+        Region 1: Memory at df201000 (32-bit, non-prefetchable) [size=4K]
+        Region 2: Memory at df202000 (32-bit, non-prefetchable) [size=4K]
+        Region 3: Memory at df203000 (32-bit, non-prefetchable) [size=4K]
+        Region 4: Memory at df204000 (32-bit, non-prefetchable) [size=4K]
+        Capabilities: [40] Vendor Specific Information: VirtIO: CommonCfg
+                BAR=0 offset=00000000 size=00000038
+        Capabilities: [50] Vendor Specific Information: VirtIO: Notify
+                BAR=1 offset=00000000 size=00000014
+        Capabilities: [60] Vendor Specific Information: VirtIO: ISR
+                BAR=2 offset=00000000 size=00000004
+        Capabilities: [70] Vendor Specific Information: VirtIO: DeviceCfg
+                BAR=3 offset=00000000 size=00000038
+        Capabilities: [80] Vendor Specific Information: VirtIO: <unknown>
+                BAR=4 offset=00000000 size=00000014
+        Capabilities: [90] MSI: Enable- Count=2/1 Maskable+ 64bit-
+                Address: 00000000  Data: 0000
+                Masking: 00000010  Pending: 00000000
+        Kernel driver in use: virtio-pci
+00: f4 1a 41 10 07 00 10 00 04 00 00 02 00 00 00 00
+10: 00 00 20 df 00 10 20 df 00 20 20 df 00 30 20 df
+20: 00 40 20 df 00 00 00 00 00 00 00 00 f4 1a 41 00
+30: 00 00 00 00 40 00 00 00 00 00 00 00 05 01 00 00
+40: 09 50 10 01 00 00 00 00 00 00 00 00 38 00 00 00
+50: 09 60 10 02 01 00 00 00 00 00 00 00 14 00 00 00
+60: 09 70 10 03 02 00 00 00 00 00 00 00 04 00 00 00
+70: 09 80 10 04 03 00 00 00 00 00 00 00 38 00 00 00
+80: 09 90 14 05 04 00 00 00 00 00 00 00 14 00 00 00
+90: 05 00 10 01 00 00 00 00 00 00 00 00 10 00 00 00
+a0: 00 00 00 00 00 00 00 00 03 10 00 00 00 00 00 00
+b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+c0: 00 00 00 00 00 00 00 00 01 d0 22 c8 00 20 00 07
+d0: 05 e0 80 00 00 00 00 00 00 00 00 00 00 00 00 00
+e0: 13 00 06 03 00 00 00 00 00 00 00 00 00 00 00 00
+f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 \end{verbatim}
-
-
 
 \bibliography{main}
 
